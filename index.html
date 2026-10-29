@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="en" data-mode="clean">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RSW — Real Saiyan Wellness</title>
+  <meta name="description" content="Real Saiyan Wellness: fitness and wellness fuel with an anime soul. Tap into your final form.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <!-- Test site: keep search engines out. Remove at launch. -->
+  <meta name="robots" content="noindex">
+
+  <!-- Runs before first paint so the saved mode never flashes the wrong theme -->
+  <script>
+    document.documentElement.classList.add('js');
+    try {
+      document.documentElement.dataset.mode = localStorage.getItem('rsw-mode') || 'clean';
+    } catch {}
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- shortcut: Archivo Expanded + Montserrat stand in for the deck's paid Fit ExtraWide + Gotham; swap in if the brand licenses them.
+       Anek Gujarati (also expanded) sets the Gujarati words; its Gujarati file only loads where they appear. -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@125,900&family=Montserrat:wght@400;600;800&family=Anek+Gujarati:wdth,wght@75..125,400..800&display=swap">
+  <!-- Only the katakana the page uses: sound effects (ドゴン) and the box labels -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&text=%E3%83%89%E3%82%B4%E3%83%B3%E3%83%97%E3%83%AD%E3%83%86%E3%82%A4%E3%82%AF%E3%83%AC%E3%82%A2%E3%83%81%E3%83%8F%E3%83%BC%E3%82%B7%E3%83%A7%E3%83%AF%E3%82%A6%E3%83%88%E3%83%9F%E3%82%B9%E3%83%AA&display=swap">
+  <link rel="stylesheet" href="styles.css">
+  <!-- Smooth scrolling; if it fails to load, the page scrolls natively -->
+  <script src="https://cdn.jsdelivr.net/npm/lenis@1.3.26/dist/lenis.min.js" integrity="sha384-jqpi9VmOdhyLoLURgjCn7EpnG9BbnHW57ibIZoeaIU+erWDH3k8fQQg0xH2ySjnw" crossorigin="anonymous" defer></script>
+  <!-- three.js draws the hero's 3D tub. Its minified build imports the full-size core,
+       so the map points that at the minified core; the integrity hashes pin both files. -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.min.js",
+        "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.core.js": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.core.min.js"
+      },
+      "integrity": {
+        "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.min.js": "sha384-EU5UWigB3OuXjAXooUegndJSqYber3YSJHDoMZs6rV96yY/ol/B4W8logw4CKWkA",
+        "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.core.min.js": "sha384-ktZslgpl0L71WZcQ5wKV96Z04i9QSjtmiU/kYpjDQSfJ5NJ8B79qDF63oNTbQySl"
+      }
+    }
+  </script>
+  <script src="main.js" defer></script>
+  <script src="hero.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="nav">
+    <a class="logo" href="#top" aria-label="RSW home">RSW</a>
+    <!-- On phones the links become a popover dropdown behind the Menu button -->
+    <nav class="nav-links" id="menu" popover aria-label="Main">
+      <a href="#story">Story</a>
+      <a href="#universe">Universe</a>
+      <a href="#lab">The Lab</a>
+      <a href="#warriors">Warriors</a>
+      <a href="#contact">Contact</a>
+    </nav>
+    <button class="menu-toggle" type="button" popovertarget="menu">Menu</button>
+    <button class="mode-switch" type="button" aria-pressed="false" aria-label="Manga mode">
+      <span>Clean</span>
+      <span>Manga</span>
+    </button>
+  </header>
+
+  <div class="petals" aria-hidden="true">
+    <i style="--x: 8%; --t: 11s; --d: -2s"></i>
+    <i style="--x: 22%; --t: 14s; --d: -9s"></i>
+    <i style="--x: 37%; --t: 10s; --d: -5s"></i>
+    <i style="--x: 51%; --t: 16s; --d: -12s"></i>
+    <i style="--x: 64%; --t: 12s; --d: -1s"></i>
+    <i style="--x: 78%; --t: 13s; --d: -7s"></i>
+    <i style="--x: 90%; --t: 9s; --d: -4s"></i>
+    <i style="--x: 99%; --t: 15s; --d: -10s"></i>
+  </div>
+
+  <main id="main">
+    <!-- The hero is different in each mode (.clean-only / .manga-only; see "Modes" in styles.css).
+         Clean: the original slider, product boxes and a Top 10 Warriors stat, moving on every 5 s.
+         Manga: a 3D power-up. main.js turns the scroll into --power (0 → 1) and switches the effects
+         on; hero.js draws the tub behind the text and charges it with the same number. -->
+    <section class="hero" id="top" aria-label="Highlights">
+      <div class="slider clean-only" aria-roledescription="carousel" aria-label="Highlights">
+        <div class="hero-slides">
+          <div class="slide is-active" role="group" aria-roledescription="slide" aria-label="1 of 2">
+            <p class="overline">Real Saiyan Wellness</p>
+            <h1 class="display">Fuel your<br>real <span class="fire">Saiyan.</span></h1>
+            <p class="lede">Hydration. Protein. Creatine. Pre-Workout. Science-backed fuel for people who train like it's their arc.</p>
+            <a class="btn" href="#lab">Explore the Lab</a>
+            <!-- 3D boxes stand in for product photos until real packaging exists (see "Product boxes" in styles.css) -->
+            <div class="showcase" aria-hidden="true">
+              <div class="product" style="--c: var(--coal); --on: var(--cream); --kana: 'クレアチン'; --sub: 'Unflavoured · 250 g'; --fs: 1.25em">
+                <div class="box"><i class="front"><b>RSW</b><strong>Creatine</strong></i><i class="back"></i><i class="right"></i><i class="left"></i><i class="top"></i></div>
+              </div>
+              <div class="product" style="--c: var(--ember); --on: var(--coal); --kana: 'プレワークアウト'; --sub: 'Fruit Punch · 300 g'">
+                <div class="box"><i class="front"><b>RSW</b><strong>Pre</strong></i><i class="back"></i><i class="right"></i><i class="left"></i><i class="top"></i></div>
+              </div>
+              <div class="product" style="--c: var(--crimson); --on: var(--cream); --kana: 'プロテイン'; --sub: 'Double Chocolate · 1 kg'">
+                <div class="box"><i class="front"><b>RSW</b><strong>Whey</strong></i><i class="back"></i><i class="right"></i><i class="left"></i><i class="top"></i></div>
+              </div>
+            </div>
+          </div>
+          <div class="slide" role="group" aria-roledescription="slide" aria-label="2 of 2">
+            <p class="overline">Every week</p>
+            <h2 class="display">Top 10<br><span class="fire">Warriors.</span></h2>
+            <!-- placeholder: replace with a real warrior's result before launch (the stat repeats it) -->
+            <p class="lede">Real people. Real discipline. <strong>62 kg → 72 kg</strong> in 12 months is a story worth telling.</p>
+            <a class="btn" href="#warriors">Meet the Warriors</a>
+            <p class="stat" aria-hidden="true"><b class="fire"></b><span class="overline">kg · up from 62 in 12 months</span></p>
+          </div>
+        </div>
+        <div class="hero-controls">
+          <button class="dot" type="button" aria-label="Show slide 1" aria-current="true"></button>
+          <button class="dot" type="button" aria-label="Show slide 2" aria-current="false"></button>
+          <button class="pause" type="button" aria-label="Pause slideshow">❚❚</button>
+          <span class="timer" aria-hidden="true"><span></span></span>
+        </div>
+        <span class="watermark" aria-hidden="true">RSW</span>
+      </div>
+      <div class="hero-stage manga-only">
+        <canvas class="hero-canvas" aria-hidden="true"></canvas>
+        <div class="hero-copy">
+          <p class="overline">Real Saiyan Wellness · <span lang="gu">અમદાવાદ</span></p>
+          <h1 class="display">Fuel your<br>real <span class="fire">Saiyan.</span></h1>
+          <p class="lede">Hydration. Protein. Creatine. Pre-Workout. Science-backed fuel for people who train like it's their arc.</p>
+          <a class="btn" href="#lab">Explore the Lab</a>
+        </div>
+        <p class="power" aria-hidden="true">
+          <span>Power</span>
+          <b>0</b>
+          <i></i>
+          <small>Scroll to charge</small>
+        </p>
+        <span class="sfx sfx-land" lang="gu" aria-hidden="true">ધડામ!</span>
+        <span class="sfx" data-at="0.2" style="--x: 16%; --y: 18%; --r: -8deg" aria-hidden="true">ゴゴゴ</span>
+        <span class="sfx" lang="gu" data-at="0.45" style="--x: 64%; --y: 30%; --r: 7deg" aria-hidden="true">કડાકો!</span>
+        <span class="sfx" data-at="0.7" style="--x: 78%; --y: 48%; --r: 6deg" aria-hidden="true">ドドド</span>
+        <div class="final">
+          <p class="shout" lang="gu" aria-hidden="true">કાઈ પો છે!</p>
+          <h2 class="display">Final form <span class="gu" lang="gu">અંતિમ સ્વરૂપ</span></h2>
+          <a class="btn" href="#lab">Explore the Lab</a>
+        </div>
+        <i class="flash" aria-hidden="true"></i>
+      </div>
+    </section>
+
+    <div class="marquee" aria-hidden="true">
+      <div class="marquee-track clean-only">
+        <span>Discipline ✦ Training ✦ Consistency ✦ Growth ✦ Self-improvement ✦ </span>
+        <span>Discipline ✦ Training ✦ Consistency ✦ Growth ✦ Self-improvement ✦ </span>
+      </div>
+      <div class="marquee-track manga-only">
+        <span>Discipline ✦ <span lang="gu">શિસ્ત</span> ✦ Training ✦ <span lang="gu">તાલીમ</span> ✦ Consistency ✦ <span lang="gu">નિયમિતતા</span> ✦ Growth ✦ <span lang="gu">વિકાસ</span> ✦ </span>
+        <span>Discipline ✦ <span lang="gu">શિસ્ત</span> ✦ Training ✦ <span lang="gu">તાલીમ</span> ✦ Consistency ✦ <span lang="gu">નિયમિતતા</span> ✦ Growth ✦ <span lang="gu">વિકાસ</span> ✦ </span>
+      </div>
+    </div>
+
+    <section class="section" id="story">
+      <p class="chapter">Chapter 01</p>
+      <h2 class="h1 reveal" data-scroll><span class="highlight">Gym was never<br>meant to be boring.</span></h2>
+      <!-- placeholder copy from the brief; the owner should rewrite it in their own words -->
+      <div class="story-grid">
+        <article class="panel reveal">
+          <h3>Why RSW?</h3>
+          <p>Every anime hero gets stronger the same way: discipline, training, consistency. Real life works exactly like that. RSW exists so the road to your best self feels like an arc worth watching, not a chore.</p>
+        </article>
+        <article class="panel reveal">
+          <h3>Our story</h3>
+          <p>Supplement brands all look the same and talk like a lab manual. We wanted fuel we can trust, explained simply, inside a world that makes you want to show up again tomorrow.</p>
+        </article>
+        <article class="panel reveal">
+          <h3>Our philosophy</h3>
+          <p><strong>Science + Wellness + Fitness + Storytelling.</strong> Honest formulas, tested batches, and a story you can be part of.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section universe room-accent" id="universe" data-scroll>
+      <p class="chapter">Chapter 02</p>
+      <h2 class="h1 reveal">The RSW Universe</h2>
+      <!-- Clean: the orbit and the four pillars. Manga: a character-select row of worlds. -->
+      <div class="orbit clean-only">
+        <span class="core">RSW</span>
+        <div class="ring">
+          <a class="node" href="#lab" style="--i: 0"><span>The Lab</span></a>
+          <a class="node" href="#warriors" style="--i: 1"><span>Warriors</span></a>
+          <a class="node" href="#vault" style="--i: 2"><span>The Vault</span></a>
+        </div>
+      </div>
+      <ol class="pillars clean-only">
+        <li class="reveal">
+          <b>01</b>
+          <h3>The Lab</h3>
+          <p>Science, products and open lab reports.</p>
+        </li>
+        <li class="reveal">
+          <b>02</b>
+          <h3>The Warriors</h3>
+          <p>Real people, real stories, real rewards.</p>
+        </li>
+        <li class="reveal">
+          <b>03</b>
+          <h3>The Vault</h3>
+          <p>Comics, characters and the RSW lore.</p>
+        </li>
+        <li class="reveal">
+          <b>04</b>
+          <h3>AI Sensei</h3>
+          <p>Your personal guide for diet, training and nutrition.</p>
+        </li>
+      </ol>
+      <p class="lede reveal manga-only">Four worlds, one arc. Pick where yours starts.</p>
+      <ul class="worlds manga-only">
+        <li class="reveal">
+          <a class="world" href="#lab">
+            <b aria-hidden="true">01</b>
+            <h3>The Lab</h3>
+            <p>Science, products and open lab reports.</p>
+            <span class="world-go" aria-hidden="true">Enter ▶</span>
+          </a>
+        </li>
+        <li class="reveal">
+          <a class="world" href="#warriors">
+            <b aria-hidden="true">02</b>
+            <h3>The Warriors</h3>
+            <p>Real people, real stories, real rewards.</p>
+            <span class="world-go" aria-hidden="true">Enter ▶</span>
+          </a>
+        </li>
+        <li class="reveal">
+          <a class="world" href="#vault">
+            <b aria-hidden="true">03</b>
+            <h3>The Vault</h3>
+            <p>Comics, characters and the RSW lore.</p>
+            <span class="world-go" aria-hidden="true">Enter ▶</span>
+          </a>
+        </li>
+        <li class="reveal">
+          <a class="world" href="#sensei">
+            <b aria-hidden="true">04</b>
+            <h3>AI Sensei</h3>
+            <p>Your personal guide for diet, training and nutrition.</p>
+            <span class="world-go" aria-hidden="true">Enter ▶</span>
+          </a>
+        </li>
+      </ul>
+    </section>
+
+    <section class="section" id="lab">
+      <p class="chapter">Chapter 03</p>
+      <h2 class="h1 reveal">The Lab</h2>
+      <p class="lede reveal">Every formula explained like a manga, not a manual.</p>
+      <!-- placeholder: flavours and sizes are samples; prices and a working Buy now come with the shop -->
+      <ul class="products">
+        <li class="panel reveal featured" style="--c: var(--crimson); --on: var(--cream); --kana: 'プロテイン'; --sub: 'Double Chocolate · 1 kg'">
+          <div class="stage" aria-hidden="true">
+            <div class="product">
+              <div class="box"><i class="front"><b>RSW</b><strong>Whey</strong></i><i class="back"></i><i class="right"></i><i class="left"></i><i class="top"></i></div>
+            </div>
+          </div>
+          <span class="tag">Protein</span>
+          <h3>Whey Protein</h3>
+          <p class="meta">Double Chocolate · 1 kg</p>
+          <p>Helps your muscles repair and grow after training.</p>
+          <div class="buy"><span>Price soon</span><button class="btn" type="button" disabled>Buy now</button></div>
+        </li>
+        <li class="panel reveal" style="--c: var(--cream); --on: var(--crimson); --kana: 'ハイドレーション'; --sub: 'Lemon Lime · 30 sachets'; --fs: 1.4em">
+          <div class="stage" aria-hidden="true">
+            <div class="product">
+              <div class="box"><i class="front"><b>RSW</b><strong>Hydrate</strong></i><i class="back"></i><i class="right"></i><i class="left"></i><i class="top"></i></div>
+            </div>
+          </div>
+          <span class="tag">Hydration</span>
+          <h3>Hydration Drink</h3>
+          <p class="meta">Lemon Lime · 30 sachets</p>
+          <p>Electrolytes to keep you sharp through long, sweaty sessions.</p>
+          <div class="buy"><span>Price soon</span><button class="btn" type="button" disabled>Buy now</button></div>
+        </li>
+        <li class="panel reveal" style="--c: var(--coal); --on: var(--cream); --kana: 'クレアチン'; --sub: 'Unflavoured · 250 g'; --fs: 1.25em">
+          <div class="stage" aria-hidden="true">
+            <div class="product">
+              <div class="box"><i class="front"><b>RSW</b><strong>Creatine</strong></i><i class="back"></i><i class="right"></i><i class="left"></i><i class="top"></i></div>
+            </div>
+          </div>
+          <span class="tag">Creatine</span>
+          <h3>Creatine Monohydrate</h3>
+          <p class="meta">Unflavoured · 250 g</p>
+          <p>Powers short, explosive efforts like heavy lifts and sprints.</p>
+          <div class="buy"><span>Price soon</span><button class="btn" type="button" disabled>Buy now</button></div>
+        </li>
+        <li class="panel reveal" style="--c: var(--ember); --on: var(--coal); --kana: 'プレワークアウト'; --sub: 'Fruit Punch · 300 g'">
+          <div class="stage" aria-hidden="true">
+            <div class="product">
+              <div class="box"><i class="front"><b>RSW</b><strong>Pre</strong></i><i class="back"></i><i class="right"></i><i class="left"></i><i class="top"></i></div>
+            </div>
+          </div>
+          <span class="tag">Pre-Workout</span>
+          <h3>Pre-Workout</h3>
+          <p class="meta">Fruit Punch · 300 g</p>
+          <p>Energy and focus before you step in.</p>
+          <div class="buy"><span>Price soon</span><button class="btn" type="button" disabled>Buy now</button></div>
+        </li>
+        <li class="panel reveal future" style="--on: var(--accent-text); --kana: 'ミステリー'">
+          <div class="stage" aria-hidden="true">
+            <div class="product">
+              <div class="box ghost"><i class="front"><strong>?</strong></i><i class="back"></i><i class="right"></i><i class="left"></i><i class="top"></i></div>
+            </div>
+          </div>
+          <span class="tag">Next</span>
+          <h3>Future drops</h3>
+          <p class="meta">Classified</p>
+          <p>More fuel is being forged.</p>
+        </li>
+      </ul>
+
+      <!-- Clean: an animated diagram. The ring is the muscles' quick energy (ATP); as each step scrolls
+           past the middle of the screen, main.js sets data-step and the ring drains, recharges and fills. -->
+      <div class="explainer clean-only">
+        <h3 class="h2 reveal">How creatine works, in 3 steps</h3>
+        <div class="explain">
+          <figure class="atp" data-step="0" aria-hidden="true">
+            <div class="atp-ring">
+              <svg viewBox="0 0 200 200">
+                <defs>
+                  <linearGradient id="atp-glow" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" style="stop-color: var(--crimson)" />
+                    <stop offset="1" style="stop-color: var(--ember)" />
+                  </linearGradient>
+                </defs>
+                <circle class="atp-track" cx="100" cy="100" r="84" />
+                <circle class="atp-fill" cx="100" cy="100" r="84" pathLength="100" />
+              </svg>
+              <span class="atp-num"></span>
+              <span class="atp-unit">ATP</span>
+            <i class="spark" style="--a: 0deg; --i: 0"></i>
+            <i class="spark" style="--a: 45deg; --i: 1"></i>
+            <i class="spark" style="--a: 90deg; --i: 2"></i>
+            <i class="spark" style="--a: 135deg; --i: 0"></i>
+            <i class="spark" style="--a: 180deg; --i: 1"></i>
+            <i class="spark" style="--a: 225deg; --i: 2"></i>
+            <i class="spark" style="--a: 270deg; --i: 0"></i>
+            <i class="spark" style="--a: 315deg; --i: 1"></i>
+            <i class="orb" style="--a: 30deg; --i: 0">Cr</i>
+            <i class="orb" style="--a: 90deg; --i: 1">Cr</i>
+            <i class="orb" style="--a: 150deg; --i: 2">Cr</i>
+            <i class="orb" style="--a: 210deg; --i: 3">Cr</i>
+            <i class="orb" style="--a: 270deg; --i: 4">Cr</i>
+            <i class="orb" style="--a: 330deg; --i: 5">Cr</i>
+              <span class="atp-rep">+1 rep</span>
+            </div>
+            <figcaption>
+              <span>Fully charged</span>
+              <span>Energy spent</span>
+              <span>Recharging with creatine</span>
+              <span>Ready for one more rep</span>
+            </figcaption>
+          </figure>
+          <ol class="steps">
+            <li>
+              <b>01</b>
+              <h4>You train</h4>
+              <p>Your muscles burn through their quick energy, ATP, in seconds.</p>
+            </li>
+            <li>
+              <b>02</b>
+              <h4>Creatine recharges</h4>
+              <p>Creatine stored in your muscles helps rebuild that ATP, fast.</p>
+            </li>
+            <li>
+              <b>03</b>
+              <h4>One more rep</h4>
+              <p>More energy for one more rep, one more sprint. You keep going.</p>
+            </li>
+          </ol>
+        </div>
+      </div>
+      <!-- Manga: three comic panels; each slams in as it scrolls into view and its ATP gauge
+           plays from --from to --to -->
+      <div class="strip manga-only">
+        <h3 class="h2 reveal">How creatine works, in 3 panels</h3>
+        <ol class="strip-panels">
+          <li class="reveal">
+            <span class="sfx-sm" aria-hidden="true">ゴゴゴ</span>
+            <b>1</b>
+            <h4>Drain</h4>
+            <span class="gauge" style="--from: 1; --to: 0.2" aria-hidden="true">ATP <i></i></span>
+            <p>You train. Your muscles burn through their quick energy (ATP) in seconds.</p>
+          </li>
+          <li class="reveal">
+            <b>2</b>
+            <h4>Recharge</h4>
+            <span class="gauge" style="--from: 0.2; --to: 0.6" aria-hidden="true">ATP <i></i></span>
+            <p>Creatine stored in your muscles helps rebuild that ATP, fast.</p>
+          </li>
+          <li class="reveal">
+            <span class="sfx-sm" aria-hidden="true">ドン</span>
+            <b>3</b>
+            <h4>Full power</h4>
+            <span class="gauge" style="--from: 0.6; --to: 1" aria-hidden="true">ATP <i></i></span>
+            <p>More energy for one more rep, one more sprint. You keep going.</p>
+          </li>
+        </ol>
+      </div>
+      <dl class="faq">
+        <div>
+          <dt>What is creatine?</dt>
+          <dd>A compound your body already makes and that you also get from meat and fish. It is one of the most researched sports supplements.</dd>
+        </div>
+        <div>
+          <dt>What does it do?</dt>
+          <dd>It helps your muscles regenerate ATP, the energy used in short, intense efforts like lifting and sprinting.</dd>
+        </div>
+        <div>
+          <dt>How do I use it?</dt>
+          <dd>Most people take 3–5 g a day with water, every day. Consistency matters more than timing. Drink enough water.</dd>
+        </div>
+      </dl>
+      <p class="trust">Every batch lab-tested. Batch lookup with full lab reports is coming soon.</p>
+    </section>
+
+    <section class="section warriors room-ink" id="warriors">
+      <p class="chapter">Chapter 04</p>
+      <h2 class="h1 reveal">Top 10 Warriors</h2>
+      <div class="warriors-body">
+        <p class="lede reveal">Not influencers. Real people from the RSW community.</p>
+        <p class="reveal">Every week, 10 new warriors share their transformation to push others forward. The most legendary stories become part of the storyboard for our next batch.</p>
+        <a class="btn reveal" href="#contact">Become a Warrior</a>
+      </div>
+    </section>
+
+    <section class="section soon">
+      <article class="panel reveal" id="vault">
+        <p class="chapter">The Vault</p>
+        <h2 class="h2">The RSW anime universe</h2>
+        <p>Comics, characters, story, lore and future episodes. The Vault opens soon.</p>
+      </article>
+      <article class="panel reveal" id="sensei">
+        <p class="chapter">AI Sensei</p>
+        <h2 class="h2">Your personal fitness teacher</h2>
+        <p>Answer three questions about your goal, diet and training, and Sensei builds your plan. Coming soon.</p>
+      </article>
+    </section>
+  </main>
+
+  <footer class="footer room-accent" id="contact">
+    <h2 class="display">Tap into your<br>final form.</h2>
+    <!-- placeholder: fill in the brand's real contact details -->
+    <ul class="contact">
+      <li><a href="#">Instagram: [handle]</a></li>
+      <li><a href="#">Email: [address]</a></li>
+      <li><a href="#">WhatsApp: [number]</a></li>
+    </ul>
+    <nav class="footer-links" aria-label="Footer">
+      <a href="#lab">The Lab</a>
+      <a href="#warriors">Warriors</a>
+      <a href="#vault">The Vault</a>
+      <a href="#sensei">AI Sensei</a>
+      <a href="#story">About RSW</a>
+    </nav>
+    <!-- placeholder: policy pages don't exist yet -->
+    <nav class="footer-legal" aria-label="Policies">
+      <a href="#">Privacy Policy</a>
+      <a href="#">Terms &amp; Conditions</a>
+      <a href="#">Shipping Policy</a>
+      <a href="#">Refund Policy</a>
+    </nav>
+    <p class="overline manga-only">From Amdavad, with <span lang="gu">ખમીર</span> · <span lang="gu">આવજો!</span></p>
+    <p class="fine">© 2026 Real Saiyan Wellness. Supplements are not a substitute for a balanced diet. Talk to a doctor if you have a medical condition.</p>
+  </footer>
+
+  <dialog class="mode-dialog" aria-labelledby="mode-title">
+    <h2 id="mode-title">Choose your experience</h2>
+    <div class="choices">
+      <button class="choice choice-clean" type="button" data-pick="clean">
+        <b>Clean</b>
+        <span>Premium. Calm. Focused.</span>
+      </button>
+      <button class="choice choice-manga" type="button" data-pick="manga">
+        <b>Manga</b>
+        <span>Loud. Inked. Full power.</span>
+      </button>
+    </div>
+    <p>Switch any time from the top corner.</p>
+  </dialog>
+</body>
+</html>
