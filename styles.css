@@ -160,7 +160,8 @@ a {
   display: none;
 }
 
-/* Clean: the shop and the Warriors first; the marquee, story and universe after them */
+/* Clean: the shop and the Warriors first; the marquee, story and universe after them (main.js moves
+   the sections to match, for Tab and screen-reader order) */
 [data-mode="clean"] main {
   display: flex;
   flex-direction: column;
@@ -361,6 +362,7 @@ h3 {
 
 /* The bar's logo and buttons shrink on phones narrower than 390px, so the whole bar always fits */
 .logo {
+  padding-block: 0.2rem; /* a tap target at least 24px tall, like the footer's and the gates' links */
   color: var(--accent-text);
   font-size: clamp(1.2rem, 6.15vw, 1.5rem);
   text-decoration: none;
@@ -438,7 +440,8 @@ h3 {
   letter-spacing: 0;
 }
 
-.cart:popover-open {
+/* .is-open: main.js's stand-in for browsers without popovers (see the end of this section) */
+.cart:is(:popover-open, .is-open) {
   inset: calc(4.5rem + var(--promo)) var(--gutter) auto auto;
   display: grid;
   gap: 0.5rem;
@@ -468,8 +471,9 @@ h3 {
   color: var(--bg);
 }
 
-/* Wide screens: the links sit in the bar, so undo the popover's default box */
-@media (min-width: 761px) {
+/* Wide screens: the links sit in the bar, so undo the popover's default box. The whole bar needs
+   about 880px (Manga's link names are longer), so portrait tablets get the phones' bar. */
+@media (min-width: 901px) {
   .nav-links {
     all: unset;
     display: flex;
@@ -482,9 +486,9 @@ h3 {
   }
 }
 
-/* Phones: a shop's bar, logo then ☰, cart and mode. The ☰ button opens the links as a
-   dropdown (main.js closes it on a pick); its word stays for screen readers. */
-@media (max-width: 760px) {
+/* Phones and portrait tablets: a shop's bar, logo then ☰, cart and mode. The ☰ button opens the
+   links as a dropdown (main.js closes it on a pick); its word stays for screen readers. */
+@media (max-width: 900px) {
   .nav {
     gap: 0.4rem;
     padding-inline: 1rem;
@@ -509,7 +513,7 @@ h3 {
     white-space: nowrap;
   }
 
-  .nav-links:popover-open {
+  .nav-links:is(:popover-open, .is-open) {
     display: grid;
     inset: calc(4.5rem + var(--promo)) var(--gutter) auto auto;
     margin: 0;
@@ -542,6 +546,25 @@ h3 {
 
   .mode-switch span {
     padding-inline: 0.5em;
+  }
+}
+
+/* Browsers without popovers (Safari before 17, so older iPhones and iPads) show [popover] boxes like
+   any other, so the closed menu and cart are hidden here, and main.js opens them with .is-open */
+@supports not selector(:popover-open) {
+  .cart:not(.is-open) {
+    display: none;
+  }
+
+  @media (max-width: 900px) {
+    .nav-links:not(.is-open) {
+      display: none;
+    }
+  }
+
+  .is-open {
+    position: fixed;
+    z-index: 60;
   }
 }
 
@@ -888,6 +911,23 @@ h3 {
 @media (max-width: 56.25rem) {
   .hero-stage {
     align-content: end;
+  }
+}
+
+/* A phone held sideways: the tub stands beside the words again, and the words only just fit, so they
+   sit centred, clear of the bar, with tighter lines */
+@media (max-height: 500px) {
+  .hero-stage {
+    align-content: center;
+    padding-block: calc(4.5rem + var(--promo)) 0.75rem;
+  }
+
+  .hero-copy {
+    gap: 0.75rem;
+  }
+
+  .hero-copy .lede {
+    font-size: 1rem;
   }
 }
 
@@ -1407,10 +1447,12 @@ h3 {
 }
 
 /* ==========================================================================
-   Universe: index.html holds both looks (see Modes).
-   Clean: a scroll scene that steps through the four worlds, each opening out of a
-   gate in the one before, like the gates of old Ahmedabad.
-   Manga: a character-select screen of inked world cards.
+   Universe: index.html holds both looks (see Modes). Both have the orbit: three
+   worlds circling the RSW logo (see "The orbit" below).
+   Clean: a scroll scene. Its first screen, the hub, holds the orbit; then it steps
+   through the four worlds, the Lab opening out of its planet and each one after it
+   out of a gate in the one before, like the gates of old Ahmedabad.
+   Manga: the orbit fills the chapter, inked like a comic.
    ========================================================================== */
 
 .universe {
@@ -1488,8 +1530,10 @@ h3 {
   padding: calc(6rem + var(--promo)) var(--gutter) 4rem;
 }
 
+/* svh: a world's words fit a short laptop screen. The last term keeps the longest word, WARRIORS
+   (about 7.1em), inside its 56% column, clear of the next door. */
 .gate .h1 {
-  font-size: clamp(2.25rem, min(7.5vw, 12svh), 8rem); /* svh: a world's words fit a short laptop screen */
+  font-size: clamp(2.25rem, min(7.5vw, 12svh, (100vw - 2 * var(--gutter)) * 0.0765), 8rem);
 }
 
 .gate p {
@@ -1507,8 +1551,9 @@ h3 {
   font-size: clamp(0.95rem, 1.1vw, 1.15rem);
 }
 
-.gate a {
+.gate-copy > a {
   display: inline-block;
+  padding-block: 0.3rem;
   color: inherit;
   font-weight: 800;
   font-size: 1.1rem;
@@ -1516,9 +1561,56 @@ h3 {
   transition: translate 0.3s var(--ease);
 }
 
-.gate a:hover,
-.gate a:focus-visible {
+.gate-copy > a:hover,
+.gate-copy > a:focus-visible {
   translate: 0.4rem 0;
+}
+
+/* The hub: the title, then the orbit, then the words under it */
+.hub .gate-copy {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(15rem, 1fr) auto;
+  grid-template-areas:
+    "title title"
+    "orbit orbit"
+    "text hint";
+  column-gap: 2rem;
+  min-height: 100svh; /* a whole screen, pinned or not */
+  padding-bottom: clamp(1.5rem, 5svh, 4rem);
+}
+
+.hub .h1 {
+  grid-area: title;
+  font-size: clamp(2rem, min(5vw, 8svh), 5rem);
+}
+
+.hub .orbit {
+  grid-area: orbit;
+  justify-self: stretch;
+  margin-inline: calc(-1 * var(--gutter));
+}
+
+.hub p {
+  grid-area: text;
+}
+
+.hub .orbit-hint {
+  grid-area: hint;
+  align-self: end;
+  max-width: 26ch;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: right;
+}
+
+/* Portrait tablets: a wider, shorter door (same middle), so it reads as a gate rather than a slit */
+@media (min-width: 761px) and (orientation: portrait) {
+  .gates {
+    --dt: 24%;
+    --dr: 6%;
+    --db: 18%;
+    --dl: 58%;
+  }
 }
 
 @media (max-width: 760px) {
@@ -1539,13 +1631,32 @@ h3 {
     grid-template-columns: minmax(0, 1fr);
     align-content: start;
   }
+
+  .hub .gate-copy {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(13rem, 1fr) auto auto;
+    grid-template-areas: "title" "orbit" "text" "hint";
+  }
+
+  .hub .orbit-hint {
+    text-align: left;
+  }
+}
+
+/* A short phone screen can't hold the hub's paragraph as well as the orbit; the hint stays */
+@media (max-width: 760px) and (max-height: 600px) {
+  .hub p:not(.orbit-hint) {
+    display: none;
+  }
 }
 
 /* The scene: the stage holds for three screens while main.js runs --s from 0 to 1. Gate i opens
    (--o: 0 to 1) through the first 70% of its quarter, growing from an arch to the whole screen;
    its words zoom in from the door, and zoom past and fade as the next gate opens (--next).
-   Until then the gate is hidden; it grows out of its door while the world before it opens */
-@media (prefers-reduced-motion: no-preference) {
+   Until then the gate is hidden; it grows out of its door while the world before it opens.
+   A screen under 501px tall (a phone held sideways) can't fit a world, so there they stack as
+   they do without motion. */
+@media (prefers-reduced-motion: no-preference) and (min-height: 501px) {
   .js .gates {
     height: 400svh;
   }
@@ -1579,109 +1690,229 @@ h3 {
     transform-origin: var(--door);
   }
 
+  /* The first world, the Lab, opens out of its planet instead: a disc that grows from it to the whole
+     screen, while the hub zooms in after it. main.js brings the planet to the front and keeps its
+     middle in --lx / --ly and its radius in --lr. */
+  .js .hub .gate-copy,
+  .js .hub + .gate {
+    --door: var(--lx, 50%) var(--ly, 50%);
+  }
+
+  .js .hub + .gate {
+    scale: 1;
+    clip-path: circle(calc(min(1, var(--o) * 50) * var(--lr, 0px) + var(--o) * 150vmax) at var(--door));
+  }
+
   /* Phones: the door sits below the words, so it only grows once they have faded */
   @media (max-width: 760px) {
     .js .gate {
       scale: clamp(0, 5 * var(--t) - 0.5, 1);
     }
 
-    .js .gate-copy {
+    .js .gate:not(.hub) .gate-copy {
       opacity: calc(1 - 10 * var(--next));
     }
   }
 }
 
-/* Manga: each world is an inked coal panel, tilted like a comic page; hover or focus lifts it
-   and powers it up in flare */
+/* The orbit (both modes): the Lab, the Warriors and the Vault circle the RSW logo like planets
+   round a sun. main.js places the planets and the logo, and draws the ring in two halves: the far
+   half behind the logo, the near half in front of it. Sizes follow the orbit's box (cq units). */
+.orbit {
+  position: relative;
+  container-type: size;
+  perspective: 60em; /* for the logo's 3D letters */
+  touch-action: pan-y; /* sideways swipes spin the worlds; up and down still scroll the page */
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: grab;
+}
+
+.orbit.is-dragging {
+  cursor: grabbing;
+}
+
+.ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.ring path {
+  vector-effect: non-scaling-stroke;
+}
+
+/* Layers, back to front: far ring, planets behind (z-index 1), logo, near ring, planets in front (4) */
+.sun {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  display: grid;
+  font: 900 min(15cqw, 32cqh) / 0.8 var(--display);
+  font-stretch: 125%;
+  letter-spacing: -0.02em;
+  transform-style: preserve-3d;
+  translate: calc(50cqw - 50%) calc(50cqh - 50%);
+  rotate: y -22deg;
+  animation: sway 9s var(--ease-io) infinite alternate;
+  pointer-events: none;
+}
+
+.sun + .ring {
+  z-index: 3;
+}
+
+/* main.js stacks copies of the letters behind the face (--z: 1, 2 …), so the logo has depth */
+.sun b {
+  grid-area: 1 / 1;
+  color: var(--coal);
+  translate: 0 0 calc(var(--z, 0) * -0.016em);
+}
+
+.sun b:first-child {
+  color: var(--cream);
+}
+
+.planet {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  width: min(max(14cqw, 24cqmin), 30cqh);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  color: var(--on);
+  text-decoration: none;
+  container-type: inline-size;
+  will-change: translate, scale;
+  cursor: pointer;
+}
+
+.planet > span {
+  position: relative;
+  display: grid;
+  place-content: center;
+  gap: 0.3em;
+  height: 100%;
+  padding: 8%;
+  border-radius: inherit;
+  background: var(--field);
+  text-align: center;
+  transition: scale 0.35s var(--ease);
+}
+
+.planet b {
+  font: 900 12cqi / 1 var(--display);
+  font-stretch: 125%;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+
+.planet small {
+  font: 600 9cqi / 1.2 var(--body);
+}
+
+/* Too small to read on a small planet: the name alone */
+@container (width < 6.5rem) {
+  .planet small {
+    display: none;
+  }
+}
+
+.planet:is(:hover, :focus-visible) > span {
+  scale: 1.1;
+}
+
+/* Each planet is its world's colour, as in Clean's gates. The translates hold the logo and the
+   planets in place until main.js takes over. */
+.planet[href="#lab"] {
+  --field: var(--cream);
+  --on: var(--coal);
+  translate: calc(25cqw - 50%) calc(72cqh - 50%);
+}
+
+.planet[href="#warriors"] {
+  --field: var(--coal);
+  --on: var(--cream);
+  translate: calc(32cqw - 50%) calc(24cqh - 50%);
+}
+
+.planet[href="#vault"] {
+  --field: var(--flare);
+  --on: var(--coal);
+  translate: calc(80cqw - 50%) calc(38cqh - 50%);
+}
+
+/* Manga: the orbit fills the chapter, on focus lines that shake while it's spun */
 .universe .lede {
   margin-top: 1.25rem;
 }
 
-.worlds {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
-  gap: 1rem;
-  width: 100%;
-  max-width: 80rem;
-  margin-top: clamp(1.5rem, 4vw, 3rem);
-  text-align: left;
+.universe > .orbit {
+  justify-self: stretch;
+  height: clamp(24rem, min(75svh, 110vw), 48rem);
+  margin: clamp(0.5rem, 2vw, 1.5rem) calc(-1 * var(--gutter)) 0;
 }
 
-.world {
-  position: relative;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  gap: 0.6rem;
-  height: 100%;
-  min-height: clamp(15rem, 28vw, 25rem);
-  padding: 4rem 1.5rem 1.5rem;
-  border: 3px solid var(--ink);
-  background: var(--halftone-light), var(--coal);
-  box-shadow: 6px 6px 0 var(--coal);
-  color: var(--cream);
-  text-decoration: none;
-  transition:
-    translate 0.35s var(--ease),
-    border-color 0.35s var(--ease);
-}
-
-.worlds li:nth-child(odd) .world {
-  rotate: -1deg;
-}
-
-.worlds li:nth-child(even) .world {
-  rotate: 1deg;
-}
-
-.world b {
+.universe > .orbit::before {
+  content: "";
   position: absolute;
-  top: 1.25rem;
-  left: 1.5rem;
-  color: var(--flare);
-  font: 900 1.5rem / 1 var(--display);
-  font-stretch: 125%;
+  inset: 0;
+  background: var(--speedlines);
+  mask: radial-gradient(farthest-side, transparent 30%, #000 60%, transparent);
+  pointer-events: none;
 }
 
-.world h3 {
-  font: 900 clamp(1.5rem, 2.4vw, 2.25rem) / 1 var(--display);
-  font-stretch: 125%;
+.universe > .orbit.is-dragging::before {
+  animation: jitter 0.3s steps(2) infinite;
 }
 
-.world p {
-  max-width: 24ch;
-  opacity: 0.8;
+/* Inked planets: an ink outline and drop shadow, a hard cel shadow and screentone dots */
+[data-mode="manga"] .ring {
+  stroke-width: 4;
+  stroke-dasharray: 0 12;
+  stroke-linecap: round;
+  opacity: 0.6;
 }
 
-.world-go {
-  color: var(--flare);
-  font: 800 0.75rem / 1 var(--body);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  opacity: 0;
-  translate: -0.5rem 0;
-  transition:
-    opacity 0.3s var(--ease),
-    translate 0.35s var(--ease);
+[data-mode="manga"] .sun {
+  -webkit-text-stroke: 0.025em var(--coal);
 }
 
-.world:is(:hover, :focus-visible) {
-  translate: 0 -0.5rem;
+[data-mode="manga"] .planet > span {
+  border: 3px solid var(--coal);
+  background:
+    radial-gradient(circle at 36% 32%, transparent 62%, rgb(0 0 0 / 0.3) 62.5%),
+    var(--halftone-dark),
+    var(--field);
+  box-shadow: 5px 5px 0 var(--coal);
+}
+
+[data-mode="manga"] .planet:is(:hover, :focus-visible) > span {
   border-color: var(--flare);
 }
 
-.world:is(:hover, :focus-visible) .world-go {
-  opacity: 1;
-  translate: none;
+[data-mode="manga"] .planet b {
+  transform: skew(-6deg);
 }
 
-/* Touch screens can't hover, so the prompt always shows there */
-@media (hover: none) {
-  .world-go {
-    opacity: 1;
-    translate: none;
-  }
+/* The world's name in katakana, stuck on like a sound effect */
+.planet i {
+  position: absolute;
+  top: -6%;
+  right: -10%;
+  color: var(--flare);
+  font: 400 16cqi / 1 var(--sfx);
+  -webkit-text-stroke: 2px var(--coal);
+  rotate: 10deg;
 }
 
 /* ==========================================================================
@@ -1721,9 +1952,9 @@ h3 {
   }
 }
 
-/* Phones swipe sideways through the cards (and the Warriors' photos) instead of scrolling past five tall ones */
+/* Phones swipe sideways through the cards instead of scrolling past five tall ones */
 @media (max-width: 40rem) {
-  :is(.products, .warrior-shots) {
+  .products {
     grid-template-columns: none;
     grid-auto-columns: 82%;
     grid-auto-flow: column;
@@ -1740,11 +1971,7 @@ h3 {
     grid-column: auto;
   }
 
-  .warrior-shots {
-    grid-auto-columns: 62%;
-  }
-
-  :is(.products, .warrior-shots) > li {
+  .products > li {
     scroll-snap-align: start;
   }
 }
@@ -1841,7 +2068,7 @@ h3 {
 /* Creatine: index.html holds both looks (see Modes).
    Clean: a scroll scene where the screen fills and drains (below). Manga: a comic strip (after it). */
 
-/* Clean: a column beside the words is the muscles' quick energy. Each step takes the first 70% of its third of
+/* Clean: a bar beside the words is the muscles' quick energy. Each step takes the first 70% of its third of
    the hold (--s from main.js): training drains the level to 20%, creatine refills it to 60%, then
    100%. --atp, a registered integer, rounds the level for the readout. Without motion the three
    steps simply sit side by side. */
@@ -1866,6 +2093,7 @@ h3 {
   padding: 0 var(--gutter);
 }
 
+.tank-bar,
 .tank-level {
   display: none;
 }
@@ -1892,7 +2120,8 @@ h3 {
   font-size: clamp(1.1rem, 1.6vw, 1.5rem);
 }
 
-@media (prefers-reduced-motion: no-preference) {
+/* The scene, on screens tall enough to hold it (not a phone held sideways) */
+@media (prefers-reduced-motion: no-preference) and (min-height: 501px) {
   .js .tank {
     height: 300svh;
   }
@@ -1906,20 +2135,26 @@ h3 {
     background: var(--bg);
   }
 
-  /* The level is a column of its own on the right, so its line never runs through the words: an athlete
-     about to lift, drained to a dim grey above the line and charged in crimson below it */
-  .js .tank-stage::before,
-  .js .tank-stage::after {
-    content: "";
+  /* The level is a bar of its own, a column on the right, so its line never runs through the words: an
+     athlete about to lift, drained to a dim grey above the line and charged in crimson below it */
+  .js .tank-bar {
     position: absolute;
     inset: calc(6rem + var(--promo)) 0 0 auto;
+    display: block;
     width: var(--bar);
+  }
+
+  .js .tank-bar::before,
+  .js .tank-bar::after {
+    content: "";
+    position: absolute;
+    inset: 0;
     background: url("img/barbell-grip.webp") 50% 40% / cover, var(--coal);
     background-blend-mode: luminosity; /* the photo's light and shade, in the colour underneath */
     filter: brightness(0.55);
   }
 
-  .js .tank-stage::after {
+  .js .tank-bar::after {
     background-color: var(--crimson);
     filter: none;
     clip-path: inset(calc((1 - var(--level)) * 100%) 0 0);
@@ -1981,10 +2216,33 @@ h3 {
     font-size: clamp(2rem, 5vw, 5rem);
   }
 
-  /* Phones: a slimmer column, so the words keep room */
-  @media (max-width: 760px) {
-    .js .tank-stage {
-      --bar: 18%;
+  /* Phones and upright tablets: a column beside the words would leave them squeezed or stranded, so the
+     bar is a wide band between the title and the readout, and the words get the whole width */
+  @media (max-width: 760px), (orientation: portrait) {
+    .js .tank-view {
+      grid-template-rows: auto minmax(5rem, 1fr) auto auto;
+      gap: 1rem;
+      padding-right: var(--gutter);
+    }
+
+    .js .tank-bar {
+      position: relative;
+      inset: auto;
+      grid-area: 2 / 1;
+      width: auto;
+      margin-inline: calc(-1 * var(--gutter));
+    }
+
+    .js .tank-level {
+      grid-area: 3 / 1;
+      display: flex;
+      align-items: baseline;
+      gap: 0.6rem;
+      font-size: clamp(3.5rem, 9vw, 6rem);
+    }
+
+    .js .tank-steps {
+      grid-area: 4 / 1;
     }
   }
 }
@@ -2194,14 +2452,32 @@ h3 {
   list-style: none;
 }
 
-/* Phones swipe through them instead (with the product cards, in The Lab) */
-@media (min-width: 40.01rem) {
+/* Phones and portrait tablets swipe through them, like the product cards */
+@media (max-width: 900px) {
+  .warrior-shots {
+    grid-auto-columns: min(62%, 17rem);
+    grid-auto-flow: column;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: var(--gutter);
+    scrollbar-width: none;
+    margin-inline: calc(var(--gutter) * -1);
+    padding: 0 var(--gutter) 1rem;
+  }
+
+  .warrior-shots > li {
+    scroll-snap-align: start;
+  }
+}
+
+@media (min-width: 901px) {
   .warrior-shots {
     grid-template-columns: repeat(5, minmax(0, 1fr));
     padding: 0;
   }
 
-  /* Tilted like a comic page (not on phones, where the swipe row would clip the corners) */
+  /* Tilted like a comic page (not in the swipe row, which would clip the corners) */
   [data-mode="manga"] .warrior-shots li:nth-child(odd) {
     rotate: -1.5deg;
   }
@@ -2346,6 +2622,7 @@ h3 {
 }
 
 .footer a {
+  padding-block: 0.25rem;
   font-weight: 600;
   text-decoration: none;
 }
@@ -2355,15 +2632,14 @@ h3 {
   text-underline-offset: 4px;
 }
 
+/* Smaller, not dimmer: dimmed, they'd fall below 4.5:1 on Manga's brighter red */
 .footer-legal {
   font-size: 0.85rem;
-  opacity: 0.85;
 }
 
 .fine {
   max-width: 60ch;
   font-size: 0.8rem;
-  opacity: 0.75;
 }
 
 /* ==========================================================================
@@ -2585,6 +2861,12 @@ h3 {
   }
 }
 
+@keyframes sway {
+  to {
+    rotate: y 22deg;
+  }
+}
+
 @keyframes jitter {
   50% {
     rotate: 2deg;
@@ -2643,11 +2925,6 @@ h3 {
     scale: 0.8;
   }
 }
-
-
-
-/* travels in along its angle; the second rotate keeps "Cr" upright */
-
 
 @keyframes land {
   0% {

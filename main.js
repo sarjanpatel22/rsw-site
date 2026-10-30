@@ -18,6 +18,7 @@ function setMode(mode, origin) {
   const apply = () => {
     root.dataset.mode = mode;
     syncToggle();
+    orderSections();
     // Manga always starts at the top, with its intro
     if (mode === 'manga') {
       if (lenis) lenis.scrollTo(0, { immediate: true });
@@ -50,7 +51,20 @@ dialog.addEventListener('close', () => { if (!savedMode()) saveMode(root.dataset
 
 // ---------- Phone menu: a popover; close it once a link is picked ----------
 const menu = document.querySelector('#menu');
-menu.addEventListener('click', (e) => { if (e.target.closest('a')) menu.hidePopover?.(); });
+menu.addEventListener('click', (e) => {
+  if (!e.target.closest('a')) return;
+  menu.hidePopover?.();
+  menu.classList.remove('is-open');
+});
+
+// Browsers without popovers (Safari before 17, so older iPhones and iPads): the ☰ and cart buttons
+// toggle a class instead (styled at the end of the nav section in styles.css)
+if (!HTMLElement.prototype.togglePopover) {
+  document.querySelectorAll('[popovertarget]').forEach((button) => {
+    const box = document.getElementById(button.getAttribute('popovertarget'));
+    button.addEventListener('click', () => button.setAttribute('aria-expanded', box.classList.toggle('is-open')));
+  });
+}
 
 // ---------- Cart: counts what's added until the shop's real checkout exists ----------
 const cart = document.querySelector('.cart-toggle');
@@ -134,17 +148,239 @@ function idleReplay() {
   else replayTimer = setTimeout(idleReplay, replayEvery);
 }
 
+// ---------- Section order: Clean is a shop, so its products and Warriors come straight after the hero ----------
+// Manga tells the story first. CSS order shows that from the first paint; moving the sections too
+// keeps Tab and screen readers in the order on screen.
+const shopFirst = [document.querySelector('#lab'), document.querySelector('#warriors')];
+const soon = document.querySelector('.soon');
+function orderSections() {
+  if (root.dataset.mode === 'clean') hero.after(...shopFirst);
+  else soon.before(...shopFirst);
+}
+orderSections();
+
 // ---------- Clean universe gates: tabbing to a world's link scrolls to where its gate is open ----------
 const gates = document.querySelector('.gates');
 const gateList = [...gates.querySelectorAll('.gate')];
 const tank = document.querySelector('.tank');
 gates.addEventListener('focusin', (e) => {
-  if (reduceMotion) return; // the gates just stack then
-  const i = gateList.indexOf(e.target.closest('.gate')) - 1; // the first is the title, not a world
+  if (getComputedStyle(gates.firstElementChild).position !== 'sticky') return; // stacked: no motion, or too short a screen
+  const i = gateList.indexOf(e.target.closest('.gate')) - 1; // the first is the hub, not a world; it shows from the start
   const box = gates.getBoundingClientRect();
-  const y = scrollY + box.top + ((i + 0.85) / 4) * (box.height - innerHeight);
+  const y = scrollY + box.top + (Math.max(0, i + 0.85) / 4) * (box.height - innerHeight);
   if (lenis) lenis.scrollTo(y, { immediate: true });
   else scrollTo({ top: y, behavior: 'instant' });
+});
+
+// ---------- The orbit: the Lab, the Warriors and the Vault circle the RSW logo ----------
+// Every frame places the planets on a tilted circle seen in perspective, so the nearest is the
+// biggest and passes in front of the logo. They drift round, wait under the mouse, spin when dragged
+// or swiped sideways, and one tabbed to comes to the front. They fly out from behind the logo as the
+// orbit scrolls in (its --p, from data-scroll). In Clean, as the gates begin, the Lab comes to the
+// front and its world opens out of it: styles.css draws that from the --lx, --ly and --lr set here.
+const third = (Math.PI * 2) / 3;
+const near = 3; // the eye is 3 orbit radii from the logo
+const drift = (Math.PI * 2) / 36; // one lap in 36 s
+const smooth = (t) => t * t * (3 - 2 * t);
+
+document.querySelectorAll('.orbit').forEach((orbit) => {
+  const sun = orbit.querySelector('.sun');
+  const [farRing, nearRing] = orbit.querySelectorAll('.ring');
+  const planets = [...orbit.querySelectorAll('.planet')];
+  const stage = gates.contains(orbit) && gates.firstElementChild; // Clean's orbit sits on the gates' stage
+  for (let z = 1; z <= 12; z++) { // the logo's depth: copies of its letters stacked behind it
+    const layer = sun.firstElementChild.cloneNode(true);
+    layer.style.setProperty('--z', z);
+    sun.append(layer);
+  }
+
+  let angle = 2; // the Lab at the front left, the Warriors far left, the Vault at the right
+  let speed = 0;
+  let cosT, sinT, cosR, sinR, radius, pr, cx, cy, ox, oy;
+
+  // Where a planet at angle a sits, per unit of radius, and how much bigger nearness makes it
+  function project(a) {
+    const scale = near / (near - Math.sin(a) * cosT);
+    const x = Math.cos(a) * scale;
+    const y = Math.sin(a) * sinT * scale;
+    return [x * cosR - y * sinR, x * sinR + y * cosR, scale];
+  }
+
+  function fit() {
+    const w = orbit.clientWidth;
+    const h = orbit.clientHeight;
+    if (!w) return; // hidden: the other mode's orbit
+    pr = planets[0].offsetWidth / 2;
+    // Taller boxes (phones) look down on the orbit more steeply; it leans a little either way
+    const tilt = Math.min(0.7, Math.max(0.21, Math.atan((h / w) * 0.6)));
+    [cosT, sinT, cosR, sinR] = [Math.cos(tilt), Math.sin(tilt), Math.cos(-0.6 * tilt), Math.sin(-0.6 * tilt)];
+
+    // The biggest orbit whose planets all fit in the box, centred in it, with room to grow on hover
+    const points = Array.from({ length: 72 }, (_, i) => project((i / 36) * Math.PI));
+    const extent = (r) => [0, 1].map((n) => [
+      Math.min(...points.map((p) => p[n] * r - pr * p[2])),
+      Math.max(...points.map((p) => p[n] * r + pr * p[2])),
+    ]);
+    const pad = Math.max(12, pr * 0.25);
+    let lo = 0;
+    let hi = w;
+    while (hi - lo > 0.5) {
+      const r = (lo + hi) / 2;
+      const [[x0, x1], [y0, y1]] = extent(r);
+      if (x1 - x0 <= w - 2 * pad && y1 - y0 <= h - 2 * pad) lo = r;
+      else hi = r;
+    }
+    radius = lo;
+    const [[x0, x1], [y0, y1]] = extent(radius);
+    cx = (w - x0 - x1) / 2;
+    cy = (h - y0 - y1) / 2;
+
+    // The ring's two halves, each a line through 49 points
+    const half = (from) => Array.from({ length: 49 }, (_, i) => {
+      const [x, y] = project(from + (i / 48) * Math.PI);
+      return [x * radius, y * radius];
+    });
+    const [far, close] = [half(Math.PI), half(0)];
+    for (const [ring, line] of [[farRing, far], [nearRing, close]]) {
+      ring.firstElementChild.setAttribute('d', `M${line.map(([x, y]) => `${(cx + x).toFixed(1)} ${(cy + y).toFixed(1)}`).join(' L')}`);
+      ring.style.transformOrigin = `${cx}px ${cy}px`;
+    }
+
+    // Shrink the logo until the near half of the ring passes clear of its letters, and so do the
+    // planets where they swap from behind it to in front, at its sides
+    const sw = sun.offsetWidth / 2;
+    const sh = sun.offsetHeight / 2;
+    let fits = Math.min(...close.map(([x, y]) => 0.95 * Math.max(Math.abs(x) / sw, Math.abs(y) / sh)));
+    const [sideX, sideY] = close[0].map(Math.abs);
+    if (sideY - pr * 1.1 < sh) fits = Math.min(fits, (sideX - pr * 1.1 - 12) / sw); // 1.1: grown on hover
+    sun.style.scale = fits < 1 ? fits.toFixed(3) : '';
+    sun.style.translate = `${cx - sw}px ${cy - sh}px`;
+    orbit.style.perspectiveOrigin = `${cx}px ${cy}px`;
+
+    if (stage) { // the orbit's place on the stage, for the Lab's disc
+      ox = oy = 0;
+      for (let el = orbit; el && el !== stage; el = el.offsetParent) {
+        ox += el.offsetLeft;
+        oy += el.offsetTop;
+      }
+    }
+  }
+
+  let hovered = false;
+  let focused = -1;
+  let drag = null;
+  let dragged = false;
+  let visible = false;
+  let running = false;
+  let last = 0;
+
+  function frame(now) {
+    if (!visible) {
+      running = false;
+      return;
+    }
+    requestAnimationFrame(frame);
+    const dt = last ? Math.min((now - last) / 1000, 0.05) : 0;
+    last = now;
+    if (radius === undefined) return; // not measured yet
+    const s = stage ? parseFloat(gates.style.getPropertyValue('--s')) || 0 : 0;
+    if (s > 0.2) return; // the Lab's world covers the hub
+
+    const aim = s > 0 ? 0 : focused; // the Lab as its world opens, or a planet tabbed to
+    if (drag?.moved) {
+      // the pointer turns it
+    } else if (aim >= 0) {
+      const off = Math.PI / 2 - aim * third - angle; // a quarter turn round is the front
+      const turn = off - Math.round(off / (Math.PI * 2)) * Math.PI * 2; // the short way round
+      angle += reduceMotion ? turn : turn * (1 - Math.exp(-dt * 6));
+      speed = 0;
+    } else {
+      speed += ((hovered || reduceMotion ? 0 : drift) - speed) * (1 - Math.exp(-dt * 1.5));
+      angle += speed * dt;
+    }
+
+    // They fly out from behind the logo as the orbit scrolls in
+    const p = parseFloat(orbit.style.getPropertyValue('--p'));
+    const out = reduceMotion || isNaN(p) ? 1 : smooth(clamp01((p - 0.3) / 0.7));
+    planets.forEach((planet, k) => {
+      const a = angle + k * third;
+      const [x, y, scale] = project(a);
+      planet.style.translate = `${(cx + x * radius * out - pr).toFixed(1)}px ${(cy + y * radius * out - pr).toFixed(1)}px`;
+      planet.style.scale = (scale * (0.3 + 0.7 * out)).toFixed(3);
+      planet.style.zIndex = Math.sin(a) > 0 && out > 0.6 ? 4 : 1;
+    });
+    for (const ring of [farRing, nearRing]) ring.style.scale = out.toFixed(3);
+
+    if (s > 0) {
+      const [x, y, scale] = project(angle);
+      stage.style.setProperty('--lx', `${(ox + cx + x * radius).toFixed(1)}px`);
+      stage.style.setProperty('--ly', `${(oy + cy + y * radius).toFixed(1)}px`);
+      stage.style.setProperty('--lr', `${(pr * scale).toFixed(1)}px`);
+    }
+  }
+
+  // Drag or swipe sideways to spin it; let go mid-swipe and it keeps spinning, slowing to its drift
+  orbit.addEventListener('pointerdown', (e) => {
+    if (e.button) return;
+    drag = { id: e.pointerId, x: e.clientX, from: angle, moved: false, at: e.timeStamp, last: angle };
+    focused = -1; // the pointer steers now, not the planet tabbed to
+  });
+  orbit.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== drag?.id) return;
+    const dx = e.clientX - drag.x;
+    if (!drag.moved) {
+      if (Math.abs(dx) < 8) return; // still a tap
+      drag.moved = true;
+      orbit.setPointerCapture(e.pointerId);
+      orbit.classList.add('is-dragging');
+    }
+    angle = drag.from - dx / radius;
+    const dt = (e.timeStamp - drag.at) / 1000;
+    if (dt > 0) speed += ((angle - drag.last) / dt - speed) * 0.5;
+    drag.at = e.timeStamp;
+    drag.last = angle;
+  });
+  function drop(e) {
+    if (e.pointerId !== drag?.id) return;
+    if (drag.moved) {
+      dragged = true;
+      setTimeout(() => { dragged = false; });
+      // Held still before letting go, it doesn't fling
+      speed = reduceMotion || e.timeStamp - drag.at > 80 ? 0 : Math.max(-6, Math.min(6, speed));
+    }
+    drag = null;
+    orbit.classList.remove('is-dragging');
+  }
+  orbit.addEventListener('pointerup', drop);
+  orbit.addEventListener('pointercancel', drop); // a vertical swipe: the page scrolls instead
+  // A drag ends in a click on the planet it started on, which mustn't open it
+  orbit.addEventListener('click', (e) => {
+    if (!dragged) return;
+    e.preventDefault();
+    e.stopPropagation(); // Lenis's anchor jump listens further up
+  }, true);
+  orbit.addEventListener('dragstart', (e) => e.preventDefault()); // a planet would drag as a link
+
+  planets.forEach((planet) => {
+    planet.addEventListener('pointerenter', (e) => { hovered = e.pointerType === 'mouse'; });
+    planet.addEventListener('pointerleave', () => { hovered = false; });
+  });
+  orbit.addEventListener('focusin', (e) => {
+    if (e.target.matches(':focus-visible')) focused = planets.indexOf(e.target);
+  });
+  orbit.addEventListener('focusout', () => { focused = -1; });
+
+  // Runs only while on screen; the other mode's orbit is hidden, so it never is
+  const resized = new ResizeObserver(fit);
+  resized.observe(orbit);
+  resized.observe(sun); // its letters change size once the font arrives
+  new IntersectionObserver(([entry]) => {
+    visible = entry.isIntersecting;
+    if (!visible || running) return;
+    running = true;
+    last = 0;
+    requestAnimationFrame(frame);
+  }).observe(orbit);
 });
 
 // ---------- Scroll reveals ----------
