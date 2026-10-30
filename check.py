@@ -91,7 +91,7 @@ try:
     def shown(sel):
         return js(f"return getComputedStyle(document.querySelector('{sel}')).display") != "none"
 
-    clean_parts, manga_parts = [".slider", ".gates", ".tank", ".warrior-shots", ".story-photo"], [".hero-stage", ".worlds", ".strip"]
+    clean_parts, manga_parts = [".slider", ".gates", ".tank"], [".hero-stage", ".worlds", ".strip"]
     assert all(map(shown, clean_parts)) and not any(map(shown, manga_parts)), "Clean should show only its own parts"
     gujarati_shown = "return [...document.querySelectorAll('[lang=\"gu\"]')].some((el) => el.checkVisibility())"
     assert not js(gujarati_shown), "Clean should show no Gujarati"
@@ -157,6 +157,9 @@ try:
                     const words = [...copy.children].map(c => { r.selectNodeContents(c); return r.getBoundingClientRect(); });
                     const nav = document.querySelector('.nav').getBoundingClientRect().bottom;
                     if (words.some(b => b.top < nav || b.bottom > innerHeight)) return 'off screen';
+                    const photo = g.querySelector('.gate-photo');
+                    const p = photo?.checkVisibility() && photo.getBoundingClientRect();
+                    if (p && words.some(b => b.right > p.left && b.left < p.right && b.bottom > p.top && b.top < p.bottom)) return 'under its photo';
                     if (!next || !(parseFloat(getComputedStyle(next).scale) > 0)) return '';
                     const st = getComputedStyle(document.querySelector('.gates')), pc = (n) => parseFloat(st.getPropertyValue(n)) / 100;
                     const door = {top: innerHeight * pc('--dt'), left: innerWidth * pc('--dl'), right: innerWidth * (1 - pc('--dr')), bottom: innerHeight * (1 - pc('--db'))};
@@ -184,12 +187,16 @@ try:
               .concat(document.querySelector('.tank-level').getBoundingClientRect().right)""")
         assert max(words) <= bar, f"the tank's words reach {max(words) - bar:.0f}px into its level column"
 
-    # The photos of people training all load (the lazy ones once scrolled to)
-    for i in range(js("return document.querySelectorAll('main img').length")):
-        js(f"document.querySelectorAll('main img')[{i}].scrollIntoView({{block: 'center'}})")
-        time.sleep(0.3)
-    broken = js("return [...document.querySelectorAll('main img')].filter((img) => !img.naturalWidth).map((img) => img.getAttribute('src'))")
-    assert not broken, f"photos failed to load: {broken}"
+    # The photos of people training all load (the lazy ones once scrolled to); each mode shows its own
+    def photos_load(label):
+        shown_imgs = "[...document.querySelectorAll('main img')].filter((img) => img.checkVisibility())"
+        for i in range(js(f"return {shown_imgs}.length")):
+            js(f"{shown_imgs}[{i}].scrollIntoView({{block: 'center'}})")
+            time.sleep(0.3)
+        broken = js(f"return {shown_imgs}.filter((img) => !img.naturalWidth).map((img) => img.getAttribute('src'))")
+        assert not broken, f"{label}: photos failed to load: {broken}"
+
+    photos_load("Clean")
 
     # Manga: picking it jumps to the top, then the 3D power-up hero stays pinned while --power
     # climbs to the final form
@@ -206,6 +213,8 @@ try:
     wait_for_landing()
     assert all(map(shown, manga_parts)) and not any(map(shown, clean_parts)), "Manga should show only its own parts"
     assert js(gujarati_shown), "Manga should show the Gujarati words"
+    inked = js("return [...document.querySelectorAll('.story-photo img, .warrior-shots img')].filter((img) => img.checkVisibility()).map((img) => [img.getAttribute('src'), getComputedStyle(img).filter])")
+    assert len(inked) == 6 and all(src.startswith("img/manga-") and f == "grayscale(1) contrast(1.35)" for src, f in inked), f"Manga should show its own photos as inked panels, got {inked}"
 
     def power():
         return float(js("return document.querySelector('.hero').style.getPropertyValue('--power')"))
@@ -255,6 +264,7 @@ try:
     time.sleep(0.6)
     revealed = js("return [...document.querySelectorAll('.strip-panels li')].filter((li) => li.classList.contains('is-in')).length")
     assert revealed == 3, f"{revealed} of 3 comic panels revealed"
+    photos_load("Manga")
     js("document.documentElement.dataset.mode = 'clean'")
 
     # Phones: links live behind the Menu button; product cards swipe sideways

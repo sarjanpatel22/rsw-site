@@ -1361,20 +1361,38 @@ h3 {
 }
 
 .story-photo {
+  position: relative;
+  margin: clamp(2.5rem, 5vw, 4rem) 0 0;
+}
+
+.story-photo img {
   display: block;
   width: 100%;
   height: auto;
   aspect-ratio: 16 / 9;
   object-fit: cover;
   object-position: 50% 25%; /* keeps her head in the wide crop */
-  margin-top: clamp(2.5rem, 5vw, 4rem);
   border-radius: var(--radius);
 }
 
 @media (min-width: 56.25rem) {
-  .story-photo {
+  .story-photo img {
     aspect-ratio: 21 / 9;
   }
+}
+
+/* Manga: a narration box in the panel's corner, on the dark floor, clear of her head */
+.story-photo figcaption {
+  position: absolute;
+  bottom: 1rem;
+  left: 1rem;
+  padding: 0.5rem 0.9rem;
+  border: 3px solid var(--coal);
+  background: var(--cream);
+  color: var(--coal);
+  font: 800 clamp(0.8rem, 1.2vw, 1.05rem) / 1.2 var(--body);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 /* Clean: the statement lights up, reading order, as you scroll it in (main.js sets --p).
@@ -1428,8 +1446,22 @@ h3 {
 }
 
 .gate {
+  position: relative;
   background: var(--field, var(--crimson));
   color: var(--on, var(--cream));
+}
+
+/* The last world has no gate after it, so its sensei stands in an arch where the next door would be
+   (and peeks out of its own door while it is still closed) */
+.gate-photo {
+  position: absolute;
+  top: var(--dt);
+  left: var(--dl);
+  width: calc(100% - var(--dl) - var(--dr));
+  height: calc(100% - var(--dt) - var(--db));
+  object-fit: cover;
+  object-position: 30% 50%;
+  border-radius: 50vw 50vw 0 0;
 }
 
 .gate:nth-child(2) {
@@ -1490,6 +1522,11 @@ h3 {
 }
 
 @media (max-width: 760px) {
+  /* No room beside the words on phones */
+  .gate-photo {
+    display: none;
+  }
+
   .gates {
     --dt: 62%;
     --dr: 30%;
@@ -2163,6 +2200,15 @@ h3 {
     grid-template-columns: repeat(5, minmax(0, 1fr));
     padding: 0;
   }
+
+  /* Tilted like a comic page (not on phones, where the swipe row would clip the corners) */
+  [data-mode="manga"] .warrior-shots li:nth-child(odd) {
+    rotate: -1.5deg;
+  }
+
+  [data-mode="manga"] .warrior-shots li:nth-child(even) {
+    rotate: 1.5deg;
+  }
 }
 
 .warrior-shots img {
@@ -2173,6 +2219,49 @@ h3 {
   object-fit: cover;
   border: 3px solid var(--coal);
   box-shadow: 5px 5px 0 var(--coal);
+}
+
+/* Manga: the photos are inked panels, black-and-white under a screentone of dots, in the room's ink
+   colour with a red offset shadow. Hovering one powers it up in full colour. */
+[data-mode="manga"] :is(.warrior-shots li, .story-photo) {
+  position: relative;
+  border: 3px solid currentColor;
+  box-shadow: var(--shadow);
+  transition: translate 0.35s var(--ease);
+}
+
+/* The panel carries the border and shadow: a filter would grey the red shadow too */
+[data-mode="manga"] :is(.warrior-shots, .story-photo) img {
+  border: 0;
+  box-shadow: none;
+  filter: grayscale(1) contrast(1.35);
+  transition: filter 0.35s var(--ease);
+}
+
+[data-mode="manga"] :is(.warrior-shots li, .story-photo)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--halftone-dark);
+  pointer-events: none;
+}
+
+[data-mode="manga"] :is(.warrior-shots li, .story-photo):hover {
+  translate: -3px -3px;
+}
+
+[data-mode="manga"] :is(.warrior-shots li, .story-photo):hover img {
+  filter: none;
+}
+
+/* The boxer stands right of centre, under the light */
+[data-mode="manga"] .story-photo img {
+  object-position: 70% 30%;
+}
+
+/* The sound effects stay above the dots */
+[data-mode="manga"] :is(.warrior-shots, .story-photo) .sfx-sm {
+  z-index: 1;
 }
 
 /* "WARRIORS" must fit its half-width column */
@@ -2205,6 +2294,35 @@ h3 {
 
 .soon .chapter {
   margin: 0;
+}
+
+/* Clean: each card opens with a photo to its edges. The Vault's is inked like a manga panel, a taste of
+   the comics to come. */
+.soon-photo {
+  position: relative;
+  margin: calc(var(--pad) * -1) calc(var(--pad) * -1) 0.75rem;
+}
+
+.soon-photo img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  object-position: 58% 40%;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.soon-photo.inked img {
+  filter: grayscale(1) contrast(1.35);
+}
+
+.soon-photo.inked::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: var(--halftone-dark);
 }
 
 /* ==========================================================================
