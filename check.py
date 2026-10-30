@@ -1,6 +1,6 @@
 """Smoke test for the RSW site: python3 check.py [screenshot_dir]
 
-Drives headless Chromium through the mode popup and switch, Clean's slider and
+Drives headless Chromium through the mode popup and switch, Clean's shop, cart, slider, universe gates and
 scroll effects, Manga's power-up hero and comic strip, smooth scrolling, product
 boxes, Gujarati font and phone menu, and checks there is no sideways scrolling
 on a small phone.
@@ -91,15 +91,25 @@ try:
     def shown(sel):
         return js(f"return getComputedStyle(document.querySelector('{sel}')).display") != "none"
 
-    clean_parts, manga_parts = [".slider", ".orbit", ".explainer"], [".hero-stage", ".worlds", ".strip"]
+    clean_parts, manga_parts = [".slider", ".gates", ".tank", ".warrior-shots", ".story-photo"], [".hero-stage", ".worlds", ".strip"]
     assert all(map(shown, clean_parts)) and not any(map(shown, manga_parts)), "Clean should show only its own parts"
     gujarati_shown = "return [...document.querySelectorAll('[lang=\"gu\"]')].some((el) => el.checkVisibility())"
     assert not js(gujarati_shown), "Clean should show no Gujarati"
 
+    # Clean is a shop: the products come before the story, and Add to cart fills the cart
+    top_of = lambda sel: js(f"return document.querySelector('{sel}').getBoundingClientRect().top")
+    assert top_of("#lab") < top_of("#story"), "Clean should show the shop before the story"
+    adds = driver.find_elements(By.CSS_SELECTOR, ".add")
+    js("arguments[0].click(); arguments[1].click()", adds[0], adds[1])
+    assert driver.find_element(By.CSS_SELECTOR, ".cart-count").text == "2", "cart badge should count 2 items"
+    driver.find_element(By.CSS_SELECTOR, ".cart-toggle").click()
+    assert "2 items" in driver.find_element(By.CSS_SELECTOR, "#cart").text, "cart panel should list 2 items"
+    js("document.querySelector('#cart').hidePopover()")
+
     # Clean: Apple-style scroll effects
     vh = js("return innerHeight")
     assert js("return document.documentElement.classList.contains('lenis')"), "Lenis smooth scrolling not running"
-    assert js("return document.querySelectorAll('.box').length") == 8, "expected 3 hero boxes + 5 card boxes"
+    assert js("return document.querySelectorAll('.box').length") == 9, "expected 4 banner boxes + 5 card boxes"
 
     def jump(y):
         js(f"scrollTo({{top: {y}, behavior: 'instant'}})")
@@ -123,18 +133,63 @@ try:
     jump(top - vh * 0.2)
     assert universe_scale() == 1, "Universe should grow to full width"
 
-    # Clean's creatine diagram: the step at the middle of the screen drives the ATP ring
-    def ring_step():
-        return js("return document.querySelector('.atp').dataset.step")
+    # Halfway through the gates' hold the Warriors fill the screen and the Vault's gate stands in them
+    def world_at(x, y):
+        return js(f"return document.elementFromPoint(innerWidth * {x}, innerHeight * {y}).closest('.gate').querySelector('.h1').textContent")
 
-    for n in range(3):
-        jump(js(f"const r = document.querySelectorAll('.steps li')[{n}].getBoundingClientRect(); return r.top + scrollY + r.height / 2") - vh / 2)
-        assert ring_step() == str(n + 1), f"step {n + 1} at mid-screen, but the ring shows step {ring_step()}"
-        ring_top = js("return document.querySelector('.atp').getBoundingClientRect().top")
-        assert 0 < ring_top < vh / 2, f"the ring should stay on screen beside the steps (top at {ring_top}px)"
-    time.sleep(1.8)  # the ring glides to full
-    atp = js("return getComputedStyle(document.querySelector('.atp')).getPropertyValue('--atp')").strip()
-    assert atp == "100", f"after step 3 the ring should be full, it shows {atp}%"
+    box = js("const b = document.querySelector('.gates').getBoundingClientRect(); return [b.top + scrollY, b.height]")
+    jump(box[0] + 0.5 * (box[1] - vh))
+    assert world_at(0.1, 0.5) == "The Warriors", "the second world should fill the screen halfway through"
+    assert world_at(0.76, 0.53) == "The Vault", "the next world's gate should stand open a crack"
+
+    # Every world's words fit on screen while it holds, and never sit under the next gate's door
+    def gate_words_clear(w, h):
+        driver.set_window_size(w, h)
+        time.sleep(0.4)
+        box = js("const b = document.querySelector('.gates').getBoundingClientRect(); return [b.top + scrollY, b.height, innerHeight]")
+        for i in range(-1, 4):
+            for f in (0.72, 0.85, 0.95):  # just opened, mid hold, end of the hold
+                jump(box[0] + max(0, (i + f) / 4) * (box[1] - box[2]))
+                bad = js("""const [g, next] = [...document.querySelectorAll('.gate')].slice(arguments[0] + 1, arguments[0] + 3);
+                    const copy = g.querySelector('.gate-copy');
+                    if (parseFloat(getComputedStyle(copy).opacity) < 0.05) return '';
+                    const r = document.createRange();
+                    const words = [...copy.children].map(c => { r.selectNodeContents(c); return r.getBoundingClientRect(); });
+                    const nav = document.querySelector('.nav').getBoundingClientRect().bottom;
+                    if (words.some(b => b.top < nav || b.bottom > innerHeight)) return 'off screen';
+                    if (!next || !(parseFloat(getComputedStyle(next).scale) > 0)) return '';
+                    const st = getComputedStyle(document.querySelector('.gates')), pc = (n) => parseFloat(st.getPropertyValue(n)) / 100;
+                    const door = {top: innerHeight * pc('--dt'), left: innerWidth * pc('--dl'), right: innerWidth * (1 - pc('--dr')), bottom: innerHeight * (1 - pc('--db'))};
+                    return words.some(b => b.right > door.left && b.left < door.right && b.bottom > door.top && b.top < door.bottom) ? 'under the next door' : '';""", i)
+                assert not bad, f"{w}x{h}: world {i + 1}'s words are {bad} at {f:.0%} of its quarter"
+
+    for size in [(1440, 900), (1366, 768), (1920, 1080), (390, 844), (360, 740), (375, 667)]:
+        gate_words_clear(*size)
+    driver.set_window_size(1440, 900)
+    time.sleep(0.4)
+
+    # Clean's creatine tank: while its stage holds, training drains the level and creatine refills it
+    def tank_at(f):
+        box = js("const b = document.querySelector('.tank').getBoundingClientRect(); return [b.top + scrollY, b.height]")
+        jump(box[0] + f * (box[1] - vh))
+        return js("const t = document.querySelector('.tank'); return [t.dataset.step, getComputedStyle(t).getPropertyValue('--atp').trim()]")
+
+    for f, want in [(0.3, ["1", "20"]), (0.6, ["2", "60"]), (1, ["3", "100"])]:
+        assert tank_at(f) == want, f"{f:.0%} through the tank should show step {want[0]} at {want[1]}%, got {tank_at(f)}"
+        assert js("return document.querySelector('.tank-stage').getBoundingClientRect().top") == 0, "the tank should hold still"
+        # The level runs in its own column: no word may reach into it
+        bar = js("return innerWidth - parseFloat(getComputedStyle(document.querySelector('.tank-stage'), '::after').width)")
+        words = js("""const r = document.createRange();
+            return [...document.querySelectorAll('.tank-view > h3, .tank-steps li')].map(el => { r.selectNodeContents(el); return r.getBoundingClientRect().right; })
+              .concat(document.querySelector('.tank-level').getBoundingClientRect().right)""")
+        assert max(words) <= bar, f"the tank's words reach {max(words) - bar:.0f}px into its level column"
+
+    # The photos of people training all load (the lazy ones once scrolled to)
+    for i in range(js("return document.querySelectorAll('main img').length")):
+        js(f"document.querySelectorAll('main img')[{i}].scrollIntoView({{block: 'center'}})")
+        time.sleep(0.3)
+    broken = js("return [...document.querySelectorAll('main img')].filter((img) => !img.naturalWidth).map((img) => img.getAttribute('src'))")
+    assert not broken, f"photos failed to load: {broken}"
 
     # Manga: picking it jumps to the top, then the 3D power-up hero stays pinned while --power
     # climbs to the final form
@@ -245,8 +300,8 @@ try:
     assert not js("return document.documentElement.classList.contains('lenis')"), "smooth scrolling despite reduced motion"
     assert js("return getComputedStyle(document.querySelector('.hero-stage')).position") != "sticky", "hero pinned despite reduced motion"
     assert js("return document.querySelector('.hero').style.getPropertyValue('--power')") == "", "hero charged despite reduced motion"
-    faded = js("return [...document.querySelectorAll('.steps li')].filter(li => getComputedStyle(li).opacity !== '1').length")
-    assert faded == 0, f"{faded} creatine steps dimmed with reduced motion"
+    faded = js("return [...document.querySelectorAll('.tank-steps li')].filter(li => getComputedStyle(li).opacity !== '1').length")
+    assert faded == 0, f"{faded} creatine steps hidden with reduced motion"
 
     print("all checks passed")
 finally:

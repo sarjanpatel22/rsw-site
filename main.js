@@ -52,6 +52,24 @@ dialog.addEventListener('close', () => { if (!savedMode()) saveMode(root.dataset
 const menu = document.querySelector('#menu');
 menu.addEventListener('click', (e) => { if (e.target.closest('a')) menu.hidePopover?.(); });
 
+// ---------- Cart: counts what's added until the shop's real checkout exists ----------
+const cart = document.querySelector('.cart-toggle');
+const cartCount = cart.querySelector('.cart-count');
+const cartNote = document.querySelector('.cart-note');
+let inCart = 0;
+document.querySelector('.products').addEventListener('click', (e) => {
+  const add = e.target.closest('.add');
+  if (!add) return;
+  inCart++;
+  const items = `${inCart} item${inCart > 1 ? 's' : ''}`;
+  cartCount.textContent = inCart;
+  cartCount.hidden = false;
+  cart.setAttribute('aria-label', `Cart, ${items}`);
+  cartNote.textContent = `${items} in your cart.`;
+  add.textContent = 'Added ✓';
+  setTimeout(() => { add.textContent = 'Add to cart'; }, 1500);
+});
+
 // ---------- Clean hero slider: the CSS timer bar drives the 5s advance ----------
 const slider = document.querySelector('.slider');
 const slides = [...slider.querySelectorAll('.slide')];
@@ -116,16 +134,18 @@ function idleReplay() {
   else replayTimer = setTimeout(idleReplay, replayEvery);
 }
 
-// ---------- Clean creatine diagram: the step at the middle of the screen drives the ATP ring ----------
-const diagram = document.querySelector('.atp');
-const steps = [...document.querySelectorAll('.steps li')];
-const stepper = new IntersectionObserver((entries) => {
-  entries.filter((e) => e.isIntersecting).forEach((e) => {
-    diagram.dataset.step = steps.indexOf(e.target) + 1;
-    steps.forEach((li) => li.classList.toggle('is-active', li === e.target));
-  });
-}, { rootMargin: '-50% 0px' }); // a line across the middle of the screen
-steps.forEach((li) => stepper.observe(li));
+// ---------- Clean universe gates: tabbing to a world's link scrolls to where its gate is open ----------
+const gates = document.querySelector('.gates');
+const gateList = [...gates.querySelectorAll('.gate')];
+const tank = document.querySelector('.tank');
+gates.addEventListener('focusin', (e) => {
+  if (reduceMotion) return; // the gates just stack then
+  const i = gateList.indexOf(e.target.closest('.gate')) - 1; // the first is the title, not a world
+  const box = gates.getBoundingClientRect();
+  const y = scrollY + box.top + ((i + 0.85) / 4) * (box.height - innerHeight);
+  if (lenis) lenis.scrollTo(y, { immediate: true });
+  else scrollTo({ top: y, behavior: 'instant' });
+});
 
 // ---------- Scroll reveals ----------
 const io = new IntersectionObserver((entries) => {
@@ -141,7 +161,8 @@ document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
 // ---------- Scroll-linked effects (skipped when motion is unwelcome) ----------
 // [data-scroll] elements get --p from 0 to 1 while their top travels from the bottom of
 // the screen to a quarter from the top. In Clean the slider's boxes turn as the hero scrolls
-// away; in Manga the hero pins and charges up as you scroll its tall track.
+// away, and the creatine tank and the universe gates play (--s) through their stages' holds; in
+// Manga the hero pins and charges up as you scroll its tall track.
 const scrollers = [...document.querySelectorAll('[data-scroll]')];
 const clamp01 = (n) => Math.min(1, Math.max(0, n));
 
@@ -152,11 +173,18 @@ function onScroll() {
   const tops = scrollers.map((el) => el.getBoundingClientRect().top);
   const pin = hero.getBoundingClientRect();
   const out = manga ? 0 : clamp01(scrollY / slider.offsetHeight);
+  const held = manga ? null : gates.getBoundingClientRect();
+  const tankBox = manga ? null : tank.getBoundingClientRect();
 
   scrollers.forEach((el, i) => el.style.setProperty('--p', clamp01((vh - tops[i]) / (vh * 0.75)).toFixed(3)));
 
   if (!manga) {
     slider.style.setProperty('--out', out.toFixed(3));
+    gates.style.setProperty('--s', clamp01(-held.top / (held.height - vh)).toFixed(4));
+    const drained = clamp01(-tankBox.top / (tankBox.height - vh));
+    tank.style.setProperty('--s', drained.toFixed(4));
+    const step = String(Math.min(3, Math.floor(drained * 3) + 1));
+    if (tank.dataset.step !== step) tank.dataset.step = step;
     return;
   }
 
