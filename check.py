@@ -2,7 +2,7 @@
 
 Drives headless Chromium through the mode popup and switch, Clean's shop, cart, slider, the universe orbit
 (drift, drag, swipe, Tab, click) and gates, scroll effects, Manga's power-up hero and comic strip, smooth scrolling, product
-boxes, Gujarati font and phone menu, and checks there is no sideways scrolling
+boxes, Gujarati font, phone menu and the AI Sensei chat, and checks there is no sideways scrolling
 on a small phone.
 """
 import pathlib
@@ -19,12 +19,13 @@ from selenium.webdriver.common.keys import Keys
 
 PAGE = (pathlib.Path(__file__).parent / "index.html").resolve().as_uri()
 
-# Dela Gothic One is loaded as a subset of just the katakana the page uses, so every one must be in it
+# Dela Gothic One is loaded as a subset of just the Japanese the page uses (katakana, and the kanji of
+# Sensei's stamp), so every letter must be in it
 site = pathlib.Path(__file__).parent
 source = "".join((site / f).read_text() for f in ("index.html", "styles.css", "hero.js"))
 subset = urllib.parse.unquote(re.search(r"family=Dela\+Gothic\+One&text=([^\"&]+)", source).group(1))
-missing = sorted({ch for ch in source if "\u3040" <= ch <= "\u30ff"} - set(subset))
-assert not missing, f"katakana missing from the Dela Gothic One subset in index.html: {''.join(missing)}"
+missing = sorted({ch for ch in source if "\u3040" <= ch <= "\u30ff" or "\u4e00" <= ch <= "\u9fff"} - set(subset))
+assert not missing, f"Japanese missing from the Dela Gothic One subset in index.html: {''.join(missing)}"
 shots = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else None
 
 opts = webdriver.ChromeOptions()
@@ -495,6 +496,77 @@ try:
             assert min(room) >= 0, f"on a sideways phone the hero's words should fit between the bar and the bottom, room {room}"
     driver.execute_cdp_cmd("Emulation.clearDeviceMetricsOverride", {})
 
+    # AI Sensei chat: the launcher keeps off the hero and the pinned scenes; the chat asks the brief's three
+    # questions, reads typed answers (Hinglish too), asks again rather than guess at a "no", builds a plan
+    # whose pick goes in the cart, and answers shop questions with the page's own prices
+    driver.set_window_size(1440, 900)
+    js("localStorage.setItem('rsw-mode', 'clean')")
+    driver.refresh()
+    jump(0)
+    time.sleep(1)
+    launcher = driver.find_element(By.CSS_SELECTOR, ".chat-toggle")
+    assert not launcher.is_displayed(), "the Sensei launcher should keep off the hero"
+    driver.find_element(By.CSS_SELECTOR, '.nav-links a[href="#lab"]').click()
+    time.sleep(2)
+    assert launcher.is_displayed(), "after the Shop link, the Sensei launcher should show over the shop"
+    jump(js("const g = document.querySelector('.gates'); return g.getBoundingClientRect().top + scrollY + 0.3 * (g.offsetHeight - innerHeight)"))
+    time.sleep(0.5)
+    assert not launcher.is_displayed(), "the Sensei launcher should keep off the pinned gates"
+    jump(js("return document.querySelector('#lab').getBoundingClientRect().top + scrollY"))
+    time.sleep(0.5)
+    launcher.click()
+    chat_open = lambda: js("return document.querySelector('#chat').matches(':popover-open')")
+    picks = lambda: js("return [...document.querySelectorAll('.chat-picks button')].map((b) => b.textContent)")
+    said = lambda: driver.find_elements(By.CSS_SELECTOR, ".from-sensei:not(.is-typing)")[-1].text
+    assert chat_open(), "the launcher should open the chat"
+    assert js("return document.activeElement.name") == "q", "with a mouse, the chat should be ready to type in"
+    assert picks() == ["Build muscle", "Lose weight"], f"Sensei should start with the goal, offering {picks()}"
+    driver.find_element(By.CSS_SELECTOR, ".chat-picks button").click()
+    time.sleep(1)
+    box = driver.find_element(By.CSS_SELECTOR, ".chat-form input")
+    box.send_keys("I don't eat meat", Keys.ENTER)
+    time.sleep(1)
+    assert said() == "What do you eat?" and picks() == ["Non-vegetarian", "Vegetarian"], "a 'no' should get the question again"
+    for answer in ("main non veg khata hu", "ghar pe"):
+        box.send_keys(answer, Keys.ENTER)
+        time.sleep(1)
+    plan = js("""const p = document.querySelector('.chat-plan'), name = p.querySelector('.chat-pick-name');
+        return [p.querySelector('.chat-for').textContent, [name.textContent, name.nextElementSibling.textContent],
+          p.querySelector('.chat-pick .box').getBoundingClientRect().width, document.querySelector('#chat').dataset.step]""")
+    assert plan[0] == "Build muscle · Non-vegetarian · Home", f"the plan should be for the answers given, got {plan[0]}"
+    assert plan[1] == ["Creatine Monohydrate", "₹999"], f"the plan should pick creatine, got {plan[1]}"
+    assert plan[2] > 0 and plan[3] == "3", f"the pick should show its carton ({plan[2]}px) and the steps be full ({plan[3]})"
+    driver.find_element(By.CSS_SELECTOR, ".chat-plan .add").click()
+    assert driver.find_element(By.CSS_SELECTOR, ".cart-count").text == "1", "Sensei's pick should go in the cart"
+    box.send_keys("price kitna hai?", Keys.ENTER)
+    time.sleep(1)
+    assert "Whey Protein ₹2,499" in said(), f"Sensei should quote the shop's prices, said: {said()}"
+    box.send_keys(Keys.ESCAPE)
+    assert not chat_open(), "Escape should close the chat"
+    # The AI Sensei world's button in the gates and the AI Sensei card open the same chat
+    for sel in ('.gate-copy > button[popovertarget="chat"]', "#sensei .btn"):
+        js("arguments[0].click()", driver.find_element(By.CSS_SELECTOR, sel))
+        assert chat_open(), f"{sel} should open the chat"
+        js("document.querySelector('#chat').hidePopover()")
+    # Typed answers are read by keywords tried in order ("non veg" isn't veg, "gain weight" isn't losing it);
+    # a "no" in the answer means ask again rather than guess. Picks are preset so any plan can be built.
+    cases = [(0, "I want to lose weight", "lose"), (0, "gain weight", "muscle"), (0, "weight kam karna hai", "lose"),
+             (0, "body banana hai", "muscle"), (0, "loose weight", "lose"), (0, "I don't want to gain fat", None),
+             (1, "pure veg", "veg"), (1, "non-veg", "nonveg"), (1, "eggetarian", "nonveg"), (1, "meat nahi khata", None),
+             (2, "Gym", "gym"), (2, "ghar pe", "home"), (2, "home gym", "gym"), (2, "outdoors", None)]
+    read = js("""Object.assign(picked, {goal: 'muscle', diet: 'veg', train: 'gym'});
+        return arguments[0].map(([s, text]) => { step = s; hear(text); return step > s ? picked[questions[s][0]] : null; })""", cases)
+    wrong = [(text, want, got) for (_, text, want), got in zip(cases, read) if got != want]
+    assert not wrong, f"Sensei misread typed answers (text, wanted, got): {wrong}"
+    time.sleep(1)  # let the queued replies land before moving on
+    # On a phone the chat is a sheet along the bottom edge
+    driver.set_window_size(390, 844)
+    time.sleep(0.5)
+    js("document.querySelector('#chat').showPopover()")
+    sheet = js("const r = document.querySelector('#chat').getBoundingClientRect(); return [r.left, r.right - document.documentElement.clientWidth, r.bottom - innerHeight, r.top]")
+    assert sheet[:3] == [0, 0, 0] and sheet[3] > 0, f"on a phone the chat should be a full-width sheet at the bottom, got {sheet}"
+    js("document.querySelector('#chat').hidePopover()")
+
     # Older Safari (before 17: older iPhones and iPads) has no popovers. Simulate it: no popover API for
     # main.js, no popover attributes, and the CSS fallback that only such browsers apply. The closed menu
     # and cart stay hidden, ☰ opens the menu, picking a link closes it, and the cart opens.
@@ -509,13 +581,15 @@ try:
     fallback = re.search(r"@supports not selector\(:popover-open\) \{(.*?)\n\}\n", (site / "styles.css").read_text(), re.S).group(1)
     js("const s = document.createElement('style'); s.textContent = arguments[0]; document.head.append(s)", fallback)
     shown_now = lambda sel: js(f"return getComputedStyle(document.querySelector('{sel}')).display") != "none"
-    assert not shown_now("#menu") and not shown_now("#cart"), "without popovers, the closed menu and cart should stay hidden"
+    assert not any(map(shown_now, ("#menu", "#cart", "#chat"))), "without popovers, the closed menu, cart and chat should stay hidden"
     driver.find_element(By.CSS_SELECTOR, ".menu-toggle").click()
     assert shown_now("#menu"), "without popovers, ☰ should open the menu"
     driver.find_element(By.CSS_SELECTOR, '#menu a[href="#lab"]').click()
     assert not shown_now("#menu"), "without popovers, picking a link should close the menu"
     driver.find_element(By.CSS_SELECTOR, ".cart-toggle").click()
     assert shown_now("#cart"), "without popovers, the cart button should open the cart"
+    js("document.querySelector('.chat-toggle').click()")
+    assert shown_now("#chat"), "without popovers, the Sensei launcher should open the chat"
     driver.execute_cdp_cmd("Page.removeScriptToEvaluateOnNewDocument", {"identifier": no_popovers["identifier"]})
     driver.set_window_size(1440, 900)
 

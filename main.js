@@ -71,7 +71,8 @@ const cart = document.querySelector('.cart-toggle');
 const cartCount = cart.querySelector('.cart-count');
 const cartNote = document.querySelector('.cart-note');
 let inCart = 0;
-document.querySelector('.products').addEventListener('click', (e) => {
+// Every Add to cart: the shop's, and Sensei's pick in the chat
+document.addEventListener('click', (e) => {
   const add = e.target.closest('.add');
   if (!add) return;
   inCart++;
@@ -83,6 +84,223 @@ document.querySelector('.products').addEventListener('click', (e) => {
   add.textContent = 'Added ✓';
   setTimeout(() => { add.textContent = 'Add to cart'; }, 1500);
 });
+
+// ---------- AI Sensei: the brief's personal fitness teacher as a chat ----------
+// Three questions (goal, diet, training), tapped or typed in English or Hinglish ("ghar pe", "weight kam
+// karna hai"), then a plan with one RSW pick. It answers questions about the shop at any point too.
+// shortcut: keyword matching, not a real AI, and no step 4 (email the plan, keep the address); both need
+// a server, so add them at launch.
+const chat = document.querySelector('#chat');
+const chatLog = chat.querySelector('.chat-log');
+const chatPicks = chat.querySelector('.chat-picks');
+const chatForm = chat.querySelector('.chat-form');
+const chatInput = chatForm.elements.q;
+
+// Names and prices come from the shop's cards, so Sensei never quotes a stale one, and the plan can show a
+// card's carton
+const shop = [...document.querySelectorAll('.products > li:not(.future)')].map((li) => ({
+  li,
+  tag: li.querySelector('.tag').textContent,
+  name: li.querySelector('h3').textContent,
+  price: li.querySelector('.buy span').textContent,
+  about: li.querySelector('.meta + p').textContent,
+}));
+const product = (tag) => shop.find((p) => p.tag === tag);
+function describe(tag) {
+  const { name, price, about } = product(tag);
+  return `${name}, ${price}. ${about} <a href="#lab">See it in the shop</a>`;
+}
+
+// Each choice: its value, its label, the words that pick it when typed, and its tile's photo (food has
+// none; its tiles show the veg / non-veg mark). Choices are tried in order, so "non veg" isn't read as
+// veg, nor "gain weight" as losing it.
+const questions = [
+  ['goal', "What's your goal?", [
+    ['muscle', 'Build muscle', /\b(muscle|bulk|gain|mass|strong|strength|banan)/, 'img/barbell-woman.webp'],
+    ['lose', 'Lose weight', /\b(lose|losing|loss|fat|slim|cut|kam|weight|vajan|wajan|pet|belly|lean)/, 'img/sprint.webp'],
+  ]],
+  ['diet', 'What do you eat?', [
+    ['nonveg', 'Non-vegetarian', /\b(non|egg|anda|ande|chicken|meat|fish|mutton)/],
+    ['veg', 'Vegetarian', /\b(veg|shakahari|jain|paneer)/],
+  ]],
+  ['train', 'Where do you train?', [
+    ['gym', 'Gym', /\bgym/, 'img/dark-barbell.webp'],
+    ['home', 'Home', /\b(home|ghar|house|room|bodyweight|park)/, 'img/sensei.webp'],
+  ]],
+];
+// "I don't eat meat" names the wrong choice, so with a no in it Sensei asks for a tap instead of guessing
+const negation = /\b(no|not|never|without|don['’]?t|can['’]?t|cannot|nahi|nahin|nhi)\b/;
+
+// What Sensei can answer at any point; the first match answers
+const faqs = [
+  [/\b(price|prices|cost|kitna|kitne|rate|mrp|rupees?|rs)\b|₹/, () => `${shop.map((p) => `${p.name} ${p.price}`).join(', ')}. <a href="#lab">See the shop</a>`],
+  [/\b(protein|whey)/, () => describe('Protein')],
+  [/creatine/, () => describe('Creatine')],
+  [/\b(hydrat|electrolyte|sachet)/, () => describe('Hydration')],
+  [/\bpre\b|pre-?workout|\benergy/, () => describe('Pre-Workout')],
+  [/\b(ship|deliver|courier|cod)/, () => `${document.querySelector('.promo span').textContent}. Orders open when the shop launches.`],
+  [/\b(order|buy|checkout|pay|upi|cart)/, () => 'Add to cart works now. Checkout opens when the shop launches.'],
+  [/\b(lab|test|report|batch|safe|side effect|quality)/, () => "Every batch is lab-tested. Supplements don't replace a balanced diet, and if you have a medical condition, talk to a doctor first."],
+  [/\b(contact|human|person|team|call|phone|whatsapp|email|instagram)\b/, () => 'Reach the team through the links at the <a href="#contact">bottom of the page</a>.'],
+  [/\b(help|who are you|what can you)/, () => 'I build your diet and workout plan from three questions, and I know the shop: products, prices, shipping and lab tests.'],
+  [/\b(hi+|hello|hey|namaste|namaskar|kem cho)\b/, () => "Hi! I'm Sensei."],
+  [/\b(thanks|thank you|thx|shukriya|dhanyavad)/, () => 'Anytime. Train hard!'],
+];
+
+// placeholder: general advice; the brand should check it before launch
+const diets = {
+  muscle: 'Eat a little more than you burn: three meals and two snacks with protein in each, and rice, roti or oats around training.',
+  lose: 'Eat a little less than you burn: half your plate vegetables, a quarter protein, a quarter roti or rice. Skip sugary drinks and fried snacks.',
+};
+const proteins = { veg: 'paneer, curd, dal, chana, rajma, soya chunks and milk', nonveg: 'eggs, chicken and fish, plus dal and curd' };
+const workouts = {
+  gym: {
+    muscle: '4 days a week: chest and shoulders, back, legs, then full body. 3–4 sets of 6–12 reps, adding a little weight each week.',
+    lose: '3 full-body weight sessions a week to keep your muscle, plus 2 brisk 30-minute cardio sessions. Walk 8,000 steps a day.',
+  },
+  home: {
+    muscle: '4 days a week: push-ups, squats, lunges, pike push-ups and backpack rows. 3–4 slow sets close to your limit, harder each week.',
+    lose: '5 days a week, 30 minutes: circuits of squats, push-ups, mountain climbers and burpees. Walk 8,000 steps a day.',
+  },
+};
+const finished = ['Start over', 'Prices', 'Shipping'];
+
+let step = 0;
+const picked = {};
+let refocus = false; // after a tapped answer, keyboard focus moves on to the next choices
+
+// html is always Sensei's own words; the visitor's are added as plain text in hear()
+function post(className, html) {
+  const message = Object.assign(document.createElement('div'), { className, innerHTML: html });
+  chatLog.append(message);
+  chatLog.scrollTop = chatLog.scrollHeight;
+  return message;
+}
+const say = (html) => post('from-sensei', html);
+
+// A question's choices are big tiles; anything else to tap is a small chip
+const tile = ([value, label, , photo]) =>
+  `<button class="tile" type="button">${photo ? `<img src="${photo}" alt="">` : `<i class="mark ${value}"></i>`}<span>${label}</span></button>`;
+const chip = (label) => `<button type="button">${label}</button>`;
+
+function offer(buttons) {
+  chatPicks.innerHTML = buttons.join('');
+  if (refocus) chatPicks.firstElementChild.focus();
+  refocus = false;
+}
+
+// Sensei "types" for a moment, so a reply doesn't land the instant you send
+function reply(then) {
+  if (reduceMotion) return then();
+  const typing = post('from-sensei is-typing', '<i></i><i></i><i></i>');
+  typing.setAttribute('aria-hidden', 'true');
+  setTimeout(() => { typing.remove(); then(); }, 600);
+}
+
+function ask() {
+  chat.dataset.step = step; // fills the header's progress bars
+  if (step === questions.length) return plan();
+  const [, question, choices] = questions[step];
+  say(question);
+  offer(choices.map(tile));
+}
+
+function plan() {
+  const { goal, diet, train } = picked;
+  const [tag, why] = diet === 'veg' ? ['Protein', 'Vegetarian meals often run short on protein, so a scoop of whey is an easy top-up.']
+    : goal === 'muscle' ? ['Creatine', 'Your meals already bring protein, so creatine is your next step.']
+    : ['Hydration', 'Fat loss means lots of cardio.'];
+  const pick = product(tag);
+  const ready = say('Your Sensei plan is ready.');
+  const card = post('chat-plan', `<h3>Your Sensei plan</h3>
+    <p class="chat-for">${questions.map(([key, , choices]) => choices.find((c) => c[0] === picked[key])[1]).join(' · ')}</p>
+    <p><b>Diet.</b> ${diets[goal]} Protein: ${proteins[diet]}.</p>
+    <p><b>Workout.</b> ${workouts[train][goal]}</p>
+    <p><b>Nutrition.</b> About 1.6–2 g of protein per kg of body weight a day (110–140 g at 70 kg), water through the day and 7–9 hours of sleep.</p>
+    <div class="chat-pick">
+      <div><p class="chat-pick-name">${pick.name}</p><p>${pick.price}</p></div>
+      <p>${why} ${pick.about}</p>
+      <button class="btn add" type="button">Add to cart</button>
+    </div>
+    <p class="chat-fine">General guidance, not medical advice. Talk to a doctor if you have a medical condition.</p>`);
+  // The pick shows its shop card's 3D carton; the card carries the carton's colours
+  const carton = pick.li.querySelector('.stage').cloneNode(true);
+  carton.style.cssText = pick.li.style.cssText;
+  card.querySelector('.chat-pick').prepend(carton);
+  chatLog.scrollTop = ready.offsetTop - 16; // read the plan from its top
+  offer(finished.map(chip));
+}
+
+function hear(text) {
+  chatLog.append(Object.assign(document.createElement('div'), { className: 'from-you', textContent: text }));
+  chatPicks.replaceChildren();
+  const t = text.toLowerCase();
+  const [key, , choices] = questions[step] || [];
+  const heard = choices?.find((c) => c[2].test(t));
+  if (heard && !negation.test(t)) {
+    picked[key] = heard[0];
+    step++;
+    return reply(ask);
+  }
+  if (/\b(start over|restart|new plan|reset)\b/.test(t)) {
+    step = 0;
+    return reply(() => { say("Let's start over."); ask(); });
+  }
+  const faq = faqs.find(([words]) => words.test(t));
+  reply(() => {
+    say(faq ? faq[1]() : heard ? 'Tap the one that fits you, so I get it right.'
+      : "Sorry, I didn't get that. I can build your plan, or tell you about our products, prices, shipping and lab tests.");
+    if (step < questions.length) ask();
+    else offer(finished.map(chip));
+  });
+}
+
+post('chat-intro', `<img src="img/sensei-plan.webp" alt="" width="1000" height="563">
+  <b>Your plan in 3 questions</b>
+  <span>Your goal, your food and where you train. Sensei builds your diet and workout, and picks the one RSW product that fits.</span>`);
+ask();
+
+chatForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const text = chatInput.value.trim();
+  chatInput.value = '';
+  if (text) hear(text);
+});
+chatPicks.addEventListener('click', (e) => {
+  const pick = e.target.closest('button');
+  if (!pick) return;
+  refocus = true;
+  hear(pick.textContent);
+});
+// A link in an answer jumps to that part of the page (Lenis listens further up), so get out of its way
+chatLog.addEventListener('click', (e) => {
+  if (!e.target.closest('a')) return;
+  chat.hidePopover?.();
+  chat.classList.remove('is-open');
+});
+// With a mouse and keyboard you can type straight away; touch screens keep their keyboard down until asked
+chat.addEventListener('toggle', (e) => {
+  if (e.newState === 'open' && !matchMedia('(pointer: coarse)').matches) chatInput.focus();
+});
+// The launcher keeps out of the way: off the hero (the first impression), Clean's pinned gates and tank
+// (their words can't scroll out from under it) and the footer (it has the contact links)
+const chatToggle = document.querySelector('.chat-toggle');
+const inView = new Set();
+function inTheWay(entries) {
+  entries.forEach((e) => {
+    if (e.isIntersecting) inView.add(e.target);
+    else inView.delete(e.target);
+  });
+  const blocked = [...inView].some((el) => !el.matches('.gates, .tank') || getComputedStyle(el.firstElementChild).position === 'sticky');
+  chatToggle.classList.toggle('is-shown', !blocked);
+}
+// The hero and footer count until only the top 30% shows them: after the Shop link, the hero's last strip
+// sits under the bar
+const showing = new IntersectionObserver(inTheWay, { rootMargin: '-30% 0px 0px' });
+document.querySelectorAll('.hero, .footer').forEach((el) => showing.observe(el));
+// A scene counts from when it reaches the top of the screen, where its stage sticks, not while it scrolls in
+const pinned = new IntersectionObserver(inTheWay, { rootMargin: '0px 0px -99%' });
+document.querySelectorAll('.gates, .tank').forEach((el) => pinned.observe(el));
 
 // ---------- Clean hero slider: the CSS timer bar drives the 5s advance ----------
 const slider = document.querySelector('.slider');

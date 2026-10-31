@@ -22,9 +22,9 @@
   <!-- shortcut: Archivo Expanded + Montserrat stand in for the deck's paid Fit ExtraWide + Gotham; swap in if the brand licenses them.
        Anek Gujarati (also expanded) sets the Gujarati words; its Gujarati file only loads where they appear. -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@125,900&family=Montserrat:wght@400;600;800&family=Anek+Gujarati:wdth,wght@75..125,400..800&display=swap">
-  <!-- Only the katakana the page uses: sound effects (ドゴン) and the box labels. check.py fails if a new
-       one is missing here, since a missing glyph falls back to another font, or to a box. -->
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&text=%E3%82%A2%E3%82%A4%E3%82%A6%E3%82%AA%E3%82%AD%E3%82%AF%E3%82%B3%E3%82%B4%E3%82%B7%E3%82%B9%E3%82%BB%E3%83%81%E3%83%83%E3%83%86%E3%83%88%E3%83%89%E3%83%8F%E3%83%90%E3%83%93%E3%83%97%E3%83%9C%E3%83%9F%E3%83%A5%E3%83%A7%E3%83%A9%E3%83%AA%E3%83%AC%E3%83%AD%E3%83%AF%E3%83%B3%E3%83%BC&display=swap">
+  <!-- Only the Japanese the page uses: sound effects (ドゴン), the box labels and Sensei's stamp (先生).
+       check.py fails if a new letter is missing here, since a missing glyph falls back to another font, or to a box. -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&text=%E3%82%A2%E3%82%A4%E3%82%A6%E3%82%AA%E3%82%AD%E3%82%AF%E3%82%B3%E3%82%B4%E3%82%B7%E3%82%B9%E3%82%BB%E3%83%81%E3%83%83%E3%83%86%E3%83%88%E3%83%89%E3%83%8F%E3%83%90%E3%83%93%E3%83%97%E3%83%9C%E3%83%9F%E3%83%A5%E3%83%A7%E3%83%A9%E3%83%AA%E3%83%AC%E3%83%AD%E3%83%AF%E3%83%B3%E3%83%BC%E5%85%88%E7%94%9F&display=swap">
   <link rel="stylesheet" href="styles.css">
   <!-- Smooth scrolling; if it fails to load, the page scrolls natively -->
   <script src="https://cdn.jsdelivr.net/npm/lenis@1.3.26/dist/lenis.min.js" integrity="sha384-jqpi9VmOdhyLoLURgjCn7EpnG9BbnHW57ibIZoeaIU+erWDH3k8fQQg0xH2ySjnw" crossorigin="anonymous" defer></script>
@@ -277,7 +277,7 @@
                 <li>Simple nutrition guidance</li>
                 <li>The RSW products that fit your plan</li>
               </ul>
-              <a href="#sensei">Ask the Sensei →</a>
+              <button type="button" popovertarget="chat">Ask the Sensei →</button>
             </div>
             <img class="gate-photo" src="img/sensei.webp" alt="A trainer guiding a man through push-ups" width="1200" height="800" loading="lazy">
           </div>
@@ -467,7 +467,8 @@
         <figure class="soon-photo clean-only"><img src="img/sensei-plan.webp" alt="A trainer going over a client's plan on a tablet" width="1000" height="563" loading="lazy"></figure>
         <p class="chapter">AI Sensei</p>
         <h2 class="h2">Your personal fitness teacher</h2>
-        <p>Answer three questions about your goal, diet and training, and Sensei builds your plan. Coming soon.</p>
+        <p>Answer three questions about your goal, diet and training, and Sensei builds your plan.</p>
+        <p><button class="btn" type="button" popovertarget="chat">Ask Sensei</button></p>
       </article>
     </section>
   </main>
@@ -497,6 +498,30 @@
     <p class="overline manga-only">From Amdavad, with <span lang="gu">ખમીર</span> · <span lang="gu">આવજો!</span></p>
     <p class="fine">© 2026 Real Saiyan Wellness. Supplements are not a substitute for a balanced diet. Talk to a doctor if you have a medical condition.</p>
   </footer>
+
+  <!-- AI Sensei, the brief's personal fitness teacher, as a chat: three questions, then a plan. main.js runs
+       the talk and shows the launcher once the hero has scrolled away. The red stamp reads 先生, sensei. -->
+  <button class="chat-toggle" type="button" popovertarget="chat">
+    <span class="seal" aria-hidden="true">先生</span>
+    <span class="chat-toggle-text"><b>Ask Sensei</b> <small>Your plan in 3 questions</small></span>
+  </button>
+  <div class="chat" id="chat" popover role="dialog" aria-labelledby="chat-title" data-lenis-prevent>
+    <div class="chat-head">
+      <span class="seal" aria-hidden="true">先生</span>
+      <div>
+        <h2 id="chat-title">AI Sensei</h2>
+        <p>Your personal fitness teacher</p>
+      </div>
+      <button class="chat-close" type="button" popovertarget="chat" popovertargetaction="hide" aria-label="Close chat">×</button>
+      <ol class="chat-steps" aria-hidden="true"><li></li><li></li><li></li></ol>
+    </div>
+    <div class="chat-log" role="log"></div>
+    <div class="chat-picks"></div>
+    <form class="chat-form">
+      <input name="q" maxlength="200" autocomplete="off" enterkeyhint="send" placeholder="Type a message" aria-label="Message Sensei">
+      <button class="chat-send" type="submit" aria-label="Send"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6" /></svg></button>
+    </form>
+  </div>
 
   <dialog class="mode-dialog" aria-labelledby="mode-title">
     <h2 id="mode-title">Choose your experience</h2>

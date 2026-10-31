@@ -550,9 +550,10 @@ h3 {
 }
 
 /* Browsers without popovers (Safari before 17, so older iPhones and iPads) show [popover] boxes like
-   any other, so the closed menu and cart are hidden here, and main.js opens them with .is-open */
+   any other, so the closed menu, cart and chat are hidden here, and main.js opens them with .is-open */
 @supports not selector(:popover-open) {
-  .cart:not(.is-open) {
+  .cart:not(.is-open),
+  .chat:not(.is-open) {
     display: none;
   }
 
@@ -1551,18 +1552,24 @@ h3 {
   font-size: clamp(0.95rem, 1.1vw, 1.15rem);
 }
 
-.gate-copy > a {
+/* Each world's link; AI Sensei's is a button that opens the chat */
+.gate-copy > :is(a, button) {
   display: inline-block;
-  padding-block: 0.3rem;
+  padding: 0.3rem 0;
+  border: 0;
+  background: none;
   color: inherit;
+  font: inherit;
   font-weight: 800;
   font-size: 1.1rem;
+  text-decoration: underline;
   text-underline-offset: 0.25em;
+  cursor: pointer;
   transition: translate 0.3s var(--ease);
 }
 
-.gate-copy > a:hover,
-.gate-copy > a:focus-visible {
+.gate-copy > :is(a, button):hover,
+.gate-copy > :is(a, button):focus-visible {
   translate: 0.4rem 0;
 }
 
@@ -2732,6 +2739,575 @@ h3 {
 }
 
 /* ==========================================================================
+   AI Sensei chat: a launcher in the corner opens a popover chat (main.js
+   runs the talk). Sensei signs with a red hanko stamp, 先生 (sensei); a
+   question's choices are big photo tiles, and the plan shows the pick's own
+   carton.
+   ========================================================================== */
+
+/* The stamp: Sensei's face on the launcher and in the chat's header */
+.seal {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 2.75rem;
+  aspect-ratio: 1;
+  border-radius: 0.6rem;
+  background: var(--crimson);
+  color: var(--cream);
+  font: 1.05rem / 1 var(--sfx);
+  letter-spacing: -0.04em;
+  writing-mode: vertical-rl;
+}
+
+/* main.js adds .is-shown once the hero has scrolled away */
+.chat-toggle {
+  position: fixed;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  z-index: 45; /* above Manga's petals, under the bar */
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.45rem 1.4rem 0.45rem 0.45rem;
+  border: 0;
+  border-radius: var(--pill);
+  background: var(--coal);
+  color: var(--cream);
+  box-shadow: 0 12px 32px rgb(29 20 20 / 0.28);
+  text-align: start;
+  cursor: pointer;
+  transition:
+    translate 0.3s var(--ease),
+    opacity 0.3s var(--ease),
+    visibility 0.3s;
+}
+
+[data-mode="manga"] .chat-toggle {
+  border: 3px solid var(--ink);
+  background: var(--bg);
+  color: var(--ink);
+  box-shadow: 5px 5px 0 var(--accent);
+}
+
+.chat-toggle:hover {
+  translate: 0 -3px;
+}
+
+.js .chat-toggle:not(.is-shown) {
+  visibility: hidden;
+  opacity: 0;
+  translate: 0 1rem;
+}
+
+.chat-toggle-text {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.chat-toggle-text b {
+  font: 800 0.8rem / 1 var(--body);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.chat-toggle-text small {
+  opacity: 0.65;
+  font: 500 0.72rem / 1.2 var(--body);
+}
+
+/* .is-open: main.js's stand-in for browsers without popovers (see the end of the nav section) */
+.chat:is(:popover-open, .is-open) {
+  inset: auto max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) auto;
+  display: flex;
+  flex-direction: column;
+  width: min(26rem, 100vw - 2rem);
+  height: min(46rem, 100dvh - 2rem);
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 24px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 24px 64px rgb(29 20 20 / 0.3);
+}
+
+[data-mode="manga"] .chat:is(:popover-open, .is-open) {
+  border: 3px solid var(--ink);
+  border-radius: 0;
+  box-shadow: var(--shadow);
+}
+
+.chat-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 1rem 1rem 0.9rem 1.1rem;
+  background: var(--coal);
+  color: var(--cream);
+}
+
+[data-mode="manga"] .chat-head {
+  background: var(--halftone-dark), var(--accent);
+}
+
+/* On Manga's crimson header the stamp turns cream */
+[data-mode="manga"] .chat-head .seal {
+  background: var(--cream);
+  color: var(--crimson);
+}
+
+.chat-head h2 {
+  font: 900 1.25rem / 1 var(--display);
+  font-stretch: 125%;
+  text-transform: uppercase;
+}
+
+.chat-head p {
+  margin-top: 0.3rem;
+  opacity: 0.7;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.chat-close {
+  width: 2.5rem;
+  aspect-ratio: 1;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(250 243 230 / 0.12);
+  color: inherit;
+  font: 400 1.4rem / 1 var(--body);
+  cursor: pointer;
+}
+
+.chat-close:hover {
+  background: rgb(250 243 230 / 0.24);
+}
+
+/* Three bars fill as the questions are answered (main.js sets data-step) */
+.chat-steps {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.35rem;
+}
+
+.chat-steps li {
+  height: 4px;
+  border-radius: 2px;
+  background: rgb(250 243 230 / 0.18);
+  transition: background 0.4s var(--ease);
+}
+
+.chat[data-step="1"] .chat-steps li:first-child,
+.chat[data-step="2"] .chat-steps li:not(:last-child),
+.chat[data-step="3"] .chat-steps li {
+  background: var(--flare);
+}
+
+/* The coal and crimson fields would hide the usual crimson focus ring */
+.chat-head :focus-visible,
+.chat-pick :focus-visible {
+  outline-color: var(--cream);
+}
+
+.chat-log {
+  position: relative; /* main.js scrolls to a message by its offsetTop */
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1.1rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.chat-log > * {
+  max-width: 85%;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.from-sensei,
+.from-you {
+  padding: 0.7rem 0.95rem;
+  border-radius: 1.1rem;
+}
+
+.from-sensei {
+  align-self: start;
+  border-bottom-left-radius: 0.3rem;
+  background: color-mix(in srgb, var(--ink) 7%, var(--surface));
+}
+
+/* Manga: Sensei talks in cream speech balloons */
+[data-mode="manga"] .from-sensei {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.from-you {
+  align-self: end;
+  border-bottom-right-radius: 0.3rem;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.is-typing {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.is-typing i {
+  width: 0.45rem;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.3;
+  animation: typing 1s infinite;
+}
+
+.is-typing i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.is-typing i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+/* The welcome: a photo and what Sensei will do */
+.chat-log > .chat-intro {
+  display: grid;
+  gap: 0.35rem;
+  max-width: none;
+  margin-bottom: 0.4rem;
+}
+
+.chat-intro img {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  margin-bottom: 0.45rem;
+  object-fit: cover;
+  border-radius: 16px;
+}
+
+[data-mode="manga"] .chat-intro img {
+  border: 3px solid var(--ink);
+  border-radius: 0;
+  filter: grayscale(1) contrast(1.35);
+}
+
+.chat-intro b {
+  font: 900 1.35rem / 1.05 var(--display);
+  font-stretch: 125%;
+  text-transform: uppercase;
+}
+
+.chat-intro span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.chat-log > .chat-plan {
+  align-self: stretch;
+  display: grid;
+  gap: 0.6rem;
+  max-width: none;
+  padding: 1.1rem;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--ink) 5%, var(--surface));
+}
+
+[data-mode="manga"] .chat-plan {
+  border: 3px solid var(--ink);
+  border-radius: 0;
+  background: none;
+}
+
+.chat-plan h3 {
+  font: 900 1.3rem / 1.05 var(--display);
+  font-stretch: 125%;
+  text-transform: uppercase;
+}
+
+.chat-for,
+.chat-fine {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* The pick: its carton beside its name and price, then why, then the button */
+.chat-pick {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin-top: 0.3rem;
+  padding: 0.9rem;
+  border-radius: 14px;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+[data-mode="manga"] .chat-pick {
+  border-radius: 0;
+}
+
+.chat-pick .stage {
+  margin: 0;
+  border-radius: 10px;
+}
+
+.chat-pick .stage .product {
+  --w: 44cqi;
+}
+
+.chat-pick-name {
+  font: 900 0.95rem / 1.1 var(--display);
+  font-stretch: 125%;
+  overflow-wrap: break-word; /* whole words: MONOHYDRATE must not split */
+  text-transform: uppercase;
+}
+
+.chat-pick-name + p {
+  margin-top: 0.3rem;
+  font-weight: 800;
+}
+
+.chat-pick > p,
+.chat-pick > .btn {
+  grid-column: 1 / -1;
+}
+
+/* A cream button on the crimson pick */
+.chat-pick .btn {
+  --btn-edge: var(--accent-ink);
+  justify-self: start;
+  background: var(--accent-ink);
+  color: var(--accent);
+}
+
+.chat-picks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0 1.1rem 0.9rem;
+}
+
+.chat-picks:empty {
+  display: none;
+}
+
+/* A question's two choices sit side by side */
+.chat-picks:has(.tile) {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+.chat-picks button:not(.tile) {
+  padding: 0.6rem 1rem;
+  border: 2px solid var(--ink);
+  border-radius: var(--pill);
+  background: none;
+  color: var(--ink);
+  font: 700 0.85rem / 1 var(--body);
+  cursor: pointer;
+}
+
+.chat-picks button:not(.tile):hover {
+  background: var(--ink);
+  color: var(--surface);
+}
+
+/* A photo dimmed on coal, the choice in big type across its foot */
+.tile {
+  position: relative;
+  display: grid;
+  align-content: end;
+  height: 8.5rem;
+  padding: 0.8rem;
+  overflow: hidden;
+  border: 0;
+  border-radius: 16px;
+  background: var(--coal);
+  color: var(--cream);
+  font: 900 0.95rem / 1.05 var(--display);
+  font-stretch: 125%;
+  text-align: start;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+[data-mode="manga"] .tile {
+  border: 3px solid var(--ink);
+  border-radius: 0;
+  box-shadow: 4px 4px 0 var(--accent);
+}
+
+.tile img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.6;
+  transition:
+    scale 0.5s var(--ease),
+    opacity 0.3s;
+}
+
+[data-mode="manga"] .tile img {
+  filter: grayscale(1) contrast(1.35);
+}
+
+.tile:hover img {
+  scale: 1.06;
+  opacity: 0.75;
+}
+
+.tile span {
+  position: relative; /* over the photo */
+}
+
+/* Food: the veg dot and the non-veg triangle, as printed on Indian food packs */
+.tile:has(.mark) {
+  align-content: space-between;
+  justify-items: start;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+/* Clean outlines them on the cream panel; Manga's tiles all have their ink border */
+[data-mode="clean"] .tile:has(.mark) {
+  border: 2px solid var(--ink);
+}
+
+.mark {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  aspect-ratio: 1;
+  border: 3px solid currentColor;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.mark::after {
+  content: "";
+  width: 55%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.mark.veg {
+  color: #138a36;
+}
+
+.mark.nonveg {
+  color: #8b3a17;
+}
+
+.mark.nonveg::after {
+  border-radius: 0;
+  clip-path: polygon(50% 8%, 100% 92%, 0 92%);
+}
+
+.chat-form {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 0.9rem max(0.9rem, env(safe-area-inset-bottom));
+}
+
+.chat-form input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.8rem 1.1rem;
+  border: 2px solid transparent;
+  border-radius: var(--pill);
+  outline: none; /* the border shows focus instead */
+  background: color-mix(in srgb, var(--ink) 7%, var(--surface));
+  color: var(--ink);
+  font: 500 1rem var(--body); /* under 16px, iPhones zoom in on focus */
+}
+
+[data-mode="manga"] .chat-form input {
+  border-color: var(--ink);
+}
+
+.chat-form input:focus {
+  border-color: var(--accent-text);
+}
+
+.chat-send {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 2.9rem;
+  aspect-ratio: 1;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  cursor: pointer;
+}
+
+[data-mode="manga"] .chat-send {
+  border: 3px solid var(--ink);
+  border-radius: 0;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.chat-send svg {
+  width: 1.3rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Phones: the launcher is just the stamp, and the chat is a sheet from the bottom edge */
+@media (max-width: 30rem) {
+  .chat-toggle {
+    padding: 0.4rem;
+  }
+
+  .chat-toggle .seal {
+    width: 3rem;
+  }
+
+  .chat-toggle-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .chat:is(:popover-open, .is-open) {
+    inset: auto 0 0;
+    width: 100%;
+    height: min(46rem, 90dvh);
+    border-radius: 24px 24px 0 0;
+  }
+
+  [data-mode="manga"] .chat:is(:popover-open, .is-open) {
+    border-width: 3px 0 0;
+  }
+}
+
+/* ==========================================================================
    Cherry blossom petals (Manga only)
    ========================================================================== */
 
@@ -2946,5 +3522,11 @@ h3 {
 @keyframes flash {
   from {
     opacity: 0.9;
+  }
+}
+
+@keyframes typing {
+  30% {
+    opacity: 1;
   }
 }
