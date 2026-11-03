@@ -1,9 +1,9 @@
 """Smoke test for the RSW site: python3 check.py [screenshot_dir]
 
 Drives headless Chromium through the mode popup and switch, Clean's shop, cart, slider, the universe orbit
-(drift, drag, swipe, Tab, click) and gates, scroll effects, Manga's power-up hero and comic strip, smooth scrolling, product
-boxes, Gujarati font, phone menu and the AI Sensei chat, and checks there is no sideways scrolling
-on a small phone.
+(drift, drag, swipe, Tab, click) and prism, scroll effects, the spin-the-plate game, Manga's power-up hero and comic
+strip, smooth scrolling, product boxes, Gujarati font, phone menu and the AI Sensei chat, and checks there is no
+sideways scrolling on a small phone.
 """
 import pathlib
 import re
@@ -63,13 +63,14 @@ def page_shots(name, width):
 try:
     driver.set_window_size(1440, 900)
     driver.get(PAGE)
-    js("localStorage.clear()")
+    js("localStorage.clear(); sessionStorage.clear()")
     driver.refresh()
 
     dialog = driver.find_element(By.CSS_SELECTOR, ".mode-dialog")
     assert not dialog.get_attribute("open"), "popup should wait before opening"
     time.sleep(1.6)
     assert dialog.get_attribute("open") is not None, "popup did not open"
+    assert js("return document.activeElement === document.querySelector('.mode-dialog')"), "neither side should start out picked"
 
     driver.find_element(By.CSS_SELECTOR, '[data-pick="manga"]').click()
     time.sleep(1)
@@ -79,7 +80,36 @@ try:
     driver.refresh()
     time.sleep(1.6)
     assert mode() == "manga", "saved mode not restored"
-    assert driver.find_element(By.CSS_SELECTOR, ".mode-dialog").get_attribute("open") is None, "popup reappeared"
+    assert driver.find_element(By.CSS_SELECTOR, ".mode-dialog").get_attribute("open") is None, "a reload in the same tab shouldn't ask again"
+
+    # A new visit asks again; Escape keeps the saved mode
+    js("sessionStorage.clear()")
+    driver.refresh()
+    time.sleep(1.6)
+    assert driver.find_element(By.CSS_SELECTOR, ".mode-dialog").get_attribute("open") is not None, "a new visit should ask again"
+    ActionChains(driver).send_keys(Keys.ESCAPE).perform()
+    time.sleep(0.4)
+    assert driver.find_element(By.CSS_SELECTOR, ".mode-dialog").get_attribute("open") is None and mode() == "manga", \
+        "Escape should close the popup and keep Manga"
+
+    # Music (once the page has its song): silent until the first click, which starts it; the switch mutes it
+    # for good. Escape, the only key so far, doesn't count as a click.
+    switch = driver.find_element(By.CSS_SELECTOR, ".sound-toggle")
+    if js("return Boolean(document.querySelector('.music'))"):
+        playing = lambda: not js("return document.querySelector('.music').paused")
+        assert not playing(), "music started before any click"
+        driver.find_element(By.CSS_SELECTOR, ".logo").click()
+        time.sleep(0.5)
+        assert playing() and switch.get_attribute("aria-pressed") == "true", "the first click should start the music"
+        switch.click()
+        assert not playing() and js("return localStorage.getItem('rsw-music')") == "off", "the switch should mute the music"
+        driver.refresh()
+        time.sleep(1.6)
+        driver.find_element(By.CSS_SELECTOR, ".logo").click()
+        time.sleep(0.5)
+        assert not playing(), "muted music should stay off after a reload"
+    else:
+        assert not switch.is_displayed(), "a music switch with no song to play"
 
     toggle = driver.find_element(By.CSS_SELECTOR, ".mode-switch")
     toggle.click()
@@ -99,6 +129,8 @@ try:
     assert active() == 1, "slider advanced while paused"
     driver.find_element(By.CSS_SELECTOR, ".dot").click()
     assert active() == 0, "dot did not jump to slide 1"  # stays paused, so screenshots show slide 1
+    srcs = js("return [...document.querySelectorAll('.slide-photo')].map((i) => i.currentSrc)")
+    assert len(srcs) == 2 and not any("-tall" in src for src in srcs), f"a wide screen got the upright crops: {srcs}"
 
     # The modes are different pages: each shows only its own hero, universe and creatine story
     def shown(sel):
@@ -127,59 +159,83 @@ try:
     assert "2 items" in driver.find_element(By.CSS_SELECTOR, "#cart").text, "cart panel should list 2 items"
     js("document.querySelector('#cart').hidePopover()")
 
-    # Clean: Apple-style scroll effects
+    # Clean's shop: dragging a carton with the mouse turns it; let go, it swings back
+    stage = driver.find_element(By.CSS_SELECTOR, ".products .stage")
+    spin_of = lambda: float(js("return getComputedStyle(document.querySelector('.products .product')).getPropertyValue('--spin')").removesuffix("deg"))
+    js("arguments[0].scrollIntoView({block: 'center'})", stage)
+    time.sleep(2)  # the cards and boxes play their entrances
+    rest = spin_of()
+    ActionChains(driver).move_to_element(stage).click_and_hold().move_by_offset(150, 0).perform()
+    held = spin_of()
+    ActionChains(driver).release().perform()
+    time.sleep(1.5)
+    assert held - rest > 60, f"dragging the carton did not turn it ({rest} -> {held})"
+    assert abs(spin_of() - rest) < 1, "the carton did not swing back when let go"
+
+    # Clean: nothing follows the scroll position; each entrance plays once, the first time it comes into view
     vh = js("return innerHeight")
     assert js("return document.documentElement.classList.contains('lenis')"), "Lenis smooth scrolling not running"
-    assert js("return document.querySelectorAll('.box').length") == 9, "expected 4 banner boxes + 5 card boxes"
+    assert js("return document.querySelectorAll('.box').length") == 11, "expected 3 banner boxes, 5 card boxes and 3 on the Lab's face"
 
     def jump(y):
         js(f"scrollTo({{top: {y}, behavior: 'instant'}})")
         time.sleep(0.4)
 
-    def protein_spin():
-        return float(js("return parseFloat(getComputedStyle(document.querySelector('.showcase .product:last-child')).getPropertyValue('--spin'))"))
+    def played(sel):
+        return js(f"return document.querySelector('{sel}').classList.contains('is-in')")
 
+    def risen(sel):  # every split letter back in its place
+        return js(f"return [...document.querySelectorAll('{sel} .c')].every((c) => ['none', '0px'].includes(getComputedStyle(c).translate))")
+
+    heading = "#story > h2"
+    assert not played(heading), "the story's heading shouldn't play before it's reached"
+    assert js("return getComputedStyle(document.querySelector('.universe')).scale") == "0.9", "Universe should start as a card"
+    at_heading = js(f"return document.querySelector('{heading}').getBoundingClientRect().top + scrollY - innerHeight / 2")
+    jump(at_heading)
+    time.sleep(1.6)
+    assert played(heading) and risen(heading), "the story's heading should rise in once it's in view"
+    sr_words = js(f"return [...document.querySelectorAll('{heading} .sr')].map((s) => s.textContent).join(' ')").split()
+    assert " ".join(sr_words) == "Gym was never meant to be boring.", "screen readers should get the heading's words whole"
     jump(0)
-    time.sleep(1.6)  # the dot click above replayed the boxes' spin-in
-    resting = protein_spin()
-    jump(js("return document.querySelector('.hero').offsetHeight / 2"))
-    assert protein_spin() - resting > 60, "hero boxes should turn as the hero scrolls away"
+    jump(at_heading)
+    assert risen(heading), "scrolling back to it shouldn't play it again"
 
-    def universe_scale():
-        return float(js("return getComputedStyle(document.querySelector('.universe')).scale"))
+    # The universe grows to the full width once; its worlds come one after another, each a screen that cuts in
+    def world_at(x, y):  # the title as a screen reader reads it (the split letters are hidden from it)
+        return js(f"""const h = document.elementFromPoint(innerWidth * {x}, innerHeight * {y}).closest('.gate').querySelector('.h1');
+            return [...h.querySelectorAll('.sr')].map((s) => s.textContent).join(' ') || h.textContent""")
 
-    top = js("return document.querySelector('.universe').getBoundingClientRect().top + scrollY")
-    jump(top - vh + 50)
-    assert universe_scale() < 0.95, "Universe should start as a card"
-    jump(top - vh * 0.2)
-    assert universe_scale() == 1, "Universe should grow to full width"
+    jump(js("return document.querySelector('.universe').getBoundingClientRect().top + scrollY - innerHeight / 2"))
+    time.sleep(1.6)
+    assert js("return getComputedStyle(document.querySelector('.universe')).scale") in ("1", "none"), "Universe should grow to full width"
+    jump(js("return document.querySelectorAll('.gate')[2].getBoundingClientRect().top + scrollY"))
+    time.sleep(1.5)
+    assert world_at(0.5, 0.5) == "The Warriors" and played(".gate:nth-child(3)"), "the Warriors should cut in and fill the screen"
+    assert js("return getComputedStyle(document.querySelector('.gate:nth-child(3)'), '::after').clipPath").startswith("polygon(-50% 0px, -30% 0px"), \
+        "the Warriors' cover should be swept away"
 
-    # Halfway through the gates' hold the Warriors fill the screen and the Vault's gate stands in them
-    def world_at(x, y):
-        return js(f"return document.elementFromPoint(innerWidth * {x}, innerHeight * {y}).closest('.gate').querySelector('.h1').textContent")
+    # Every world's words fit on its screen and stay off its picture. The hub's words stay off the orbit, whose
+    # planets and logo stay inside its box, and the near half of the ring passes clear of the logo's letters.
+    js("document.querySelectorAll('.universe, .universe [data-anim]').forEach((el) => el.classList.add('is-in'))")
+    time.sleep(2.5)  # the universe's entrances all done (the rest still play when reached)
 
-    box = js("const b = document.querySelector('.gates').getBoundingClientRect(); return [b.top + scrollY, b.height]")
-    jump(box[0] + 0.5 * (box[1] - vh))
-    assert world_at(0.1, 0.5) == "The Warriors", "the second world should fill the screen halfway through"
-    assert world_at(0.76, 0.53) == "The Vault", "the next world's gate should stand open a crack"
-
-    # Every world's words fit on screen while it holds, and never sit under the next gate's door. The hub
-    # (the orbit's screen) has no door: its words stay off the orbit, whose planets and logo stay inside
-    # its box, and the near half of the ring passes clear of the logo's letters.
-    def gate_words_clear(w, h):
+    def world_words_fit(w, h):
         driver.set_window_size(w, h)
         time.sleep(0.4)
-        jump(js("return document.querySelector('.gates').getBoundingClientRect().top + scrollY"))  # measure once the universe has grown to full size
-        box = js("const b = document.querySelector('.gates').getBoundingClientRect(); return [b.top + scrollY, b.height, innerHeight]")
-        for i in range(-1, 4):
-            for f in (0.72, 0.85, 0.95):  # just opened, mid hold, end of the hold
-                jump(box[0] + max(0, (i + f) / 4) * (box[1] - box[2]))
-                bad = js("""const [g, next] = [...document.querySelectorAll('.gate')].slice(arguments[0] + 1, arguments[0] + 3);
+        for face in range(5):
+            jump(js(f"return document.querySelectorAll('.gate')[{face}].getBoundingClientRect().top + scrollY"))
+            bad = js("""const g = document.querySelectorAll('.gate')[arguments[0]];
                     const copy = g.querySelector('.gate-copy');
-                    if (parseFloat(getComputedStyle(copy).opacity) < 0.05) return '';
                     const r = document.createRange();
                     const shown = [...copy.children].filter(c => c.checkVisibility());
-                    const words = shown.map(c => { r.selectNodeContents(c); return r.getBoundingClientRect(); });
+                    // a split title is measured by its letters: its screen-reader copy is laid out unclipped
+                    const box = (el) => {
+                      const ls = [...el.querySelectorAll('.c')].map((l) => l.getBoundingClientRect());
+                      if (!ls.length) { r.selectNodeContents(el); return r.getBoundingClientRect(); }
+                      return {left: Math.min(...ls.map(b => b.left)), right: Math.max(...ls.map(b => b.right)),
+                              top: Math.min(...ls.map(b => b.top)), bottom: Math.max(...ls.map(b => b.bottom))};
+                    };
+                    const words = shown.map(box);
                     const nav = document.querySelector('.nav').getBoundingClientRect().bottom;
                     if (words.some(b => b.top < nav || b.bottom > innerHeight)) return 'off screen';
                     if (g.classList.contains('hub')) {
@@ -198,21 +254,17 @@ try:
                     }
                     const photo = g.querySelector('.gate-photo');
                     const p = photo?.checkVisibility() && photo.getBoundingClientRect();
-                    if (p && words.some(b => b.right > p.left && b.left < p.right && b.bottom > p.top && b.top < p.bottom)) return 'under its photo';
-                    if (!next || !(parseFloat(getComputedStyle(next).scale) > 0)) return '';
-                    const st = getComputedStyle(document.querySelector('.gates')), pc = (n) => parseFloat(st.getPropertyValue(n)) / 100;
-                    const door = {top: innerHeight * pc('--dt'), left: innerWidth * pc('--dl'), right: innerWidth * (1 - pc('--dr')), bottom: innerHeight * (1 - pc('--db'))};
-                    return words.some(b => b.right > door.left && b.left < door.right && b.bottom > door.top && b.top < door.bottom) ? 'under the next door' : '';""", i)
-                assert not bad, f"{w}x{h}: world {i + 1}'s words are {bad} at {f:.0%} of its quarter"
+                    return p && words.some(b => b.right > p.left && b.left < p.right && b.bottom > p.top && b.top < p.bottom) ? 'under its picture' : '';""", face)
+            assert not bad, f"{w}x{h}: world {face}'s words are {bad}"
 
     sizes = [(1440, 900), (1366, 768), (1280, 720), (1920, 1080), (1024, 911), (768, 1167), (390, 844), (360, 740), (375, 667)]
     for size in sizes:  # window sizes: laptops, a landscape and a portrait iPad, phones
-        gate_words_clear(*size)
+        world_words_fit(*size)
     driver.set_window_size(1440, 900)
     time.sleep(0.4)
 
     # The orbit: the worlds drift round the logo; one tabbed to comes to the front and a click opens it;
-    # dragging spins them without opening one; and as the gates begin, the Lab's world opens out of its planet
+    # dragging spins them without opening one
     def planets(orbit):
         """[centre x, centre y, scale, z-index] of each planet: the Lab, the Warriors, the Vault"""
         return js(f"""return [...document.querySelectorAll('{orbit} .planet')].map((p) => {{ const b = p.getBoundingClientRect();
@@ -227,12 +279,13 @@ try:
         ps = planets(orbit)
         return max(range(3), key=lambda k: ps[k][2])
 
-    gates_top, gates_track = js("const b = document.querySelector('.gates').getBoundingClientRect(); return [b.top + scrollY, b.height - innerHeight]")
+    gates_top = js("return document.querySelector('.gates').getBoundingClientRect().top + scrollY")
     jump(gates_top)
     time.sleep(1)
     assert drifts(".hub"), "the worlds should drift round the logo"
 
     js("arguments[0].focus()", driver.find_element(By.CSS_SELECTOR, ".hub + .gate .gate-copy > a"))
+    time.sleep(1)  # focus scrolls it into view, smoothly
     ActionChains(driver).key_down(Keys.SHIFT).send_keys(Keys.TAB).key_up(Keys.SHIFT).perform()
     time.sleep(1.5)
     assert js("return document.activeElement.getAttribute('href')") == "#vault", "Shift+Tab from the Lab's link should reach the Vault planet"
@@ -260,45 +313,74 @@ try:
     assert planets(".hub")[k][0] - x > 100, "dragging right should carry the front world right"
     mouse("mouseMoved", 5, 5)  # off the planets, so they drift again
 
-    jump(gates_top + 0.03 * gates_track)  # the gates begin
-    time.sleep(1.2)
-    assert front(".hub") == 0, "as the gates begin, the Lab should come to the front"
-    lx, ly = js("const s = document.querySelector('.gates-stage').style; return ['--lx', '--ly'].map((v) => parseFloat(s.getPropertyValue(v)))")
-    assert js(f"return document.elementFromPoint({lx}, {ly}).closest('.gate') === document.querySelector('.hub + .gate')"), \
-        "the Lab's world should open out of its planet"
-    jump(gates_top)
-    time.sleep(0.5)
-    x, y = planets(".hub")[front(".hub")][:2]
-    assert js(f"return document.elementFromPoint({x}, {y}).closest('.gate').classList.contains('hub')"), "before the gates begin, the Lab's world stays shut"
+    # Clean's creatine tank plays once, like a short film, when it comes into view: training drains the level
+    # to 20%, creatine refills it to 60%, then to 100%, each step's words in turn
+    def tank():
+        return js("""const t = document.querySelector('.tank');
+            return [+getComputedStyle(t).getPropertyValue('--atp'), [...t.querySelectorAll('.tank-steps li')].map((li) => +getComputedStyle(li).opacity > 0.5)]""")
 
-    # Clean's creatine tank: while its stage holds, training drains the level and creatine refills it
-    def tank_at(f):
-        box = js("const b = document.querySelector('.tank').getBoundingClientRect(); return [b.top + scrollY, b.height, innerHeight]")
-        jump(box[0] + f * (box[1] - box[2]))
-        return js("const t = document.querySelector('.tank'); return [t.dataset.step, getComputedStyle(t).getPropertyValue('--atp').trim()]")
-
-    for f, want in [(0.3, ["1", "20"]), (0.6, ["2", "60"]), (1, ["3", "100"])]:
-        assert tank_at(f) == want, f"{f:.0%} through the tank should show step {want[0]} at {want[1]}%, got {tank_at(f)}"
-        assert js("return document.querySelector('.tank-stage').getBoundingClientRect().top") == 0, "the tank should hold still"
+    jump(js("return document.querySelector('.tank').getBoundingClientRect().top + scrollY"))
+    seen = []
+    for _ in range(40):
+        seen.append(tank())
+        time.sleep(0.2)
+    assert any(level <= 25 and steps == [True, False, False] for level, steps in seen), f"training should drain the level on the first step: {seen}"
+    assert any(50 <= level <= 70 and steps == [False, True, False] for level, steps in seen), f"creatine should refill it on the second step: {seen}"
+    assert seen[-1] == [100, [False, False, True]], f"the film should end full, on the last step: {seen[-1]}"
 
     # The level runs in a bar of its own (a column, or a band on phones): at every size it's big enough to
     # see, and the words stay out of it and on the screen
     for w, h in sizes:
         driver.set_window_size(w, h)
-        for f in (0.3, 0.6, 1):
-            tank_at(f)
-            time.sleep(0.5)  # the step's words slide in
-            bad = js("""const tank = document.querySelector('.tank'), r = document.createRange();
-                const bar = tank.querySelector('.tank-bar').getBoundingClientRect();
-                if (bar.width < innerWidth * 0.35 || bar.height < 80) return 'beside a level bar too thin to see';
-                const boxes = [...tank.querySelectorAll(`.tank-view > h3, .tank-steps li:nth-child(${tank.dataset.step})`)]
-                  .map((el) => { r.selectNodeContents(el); return r.getBoundingClientRect(); }).concat(tank.querySelector('.tank-level').getBoundingClientRect());
-                if (boxes.some((b) => b.right > bar.left && b.left < bar.right && b.bottom > bar.top && b.top < bar.bottom)) return 'into the level bar';
-                const nav = document.querySelector('.nav').getBoundingClientRect().bottom;
-                return boxes.some((b) => b.top < nav || b.bottom > innerHeight) ? 'off the screen' : ''""")
-            assert not bad, f"{w}x{h}: the tank's words run {bad} at {f:.0%}"
+        jump(js("return document.querySelector('.tank').getBoundingClientRect().top + scrollY"))
+        bad = js("""const tank = document.querySelector('.tank'), r = document.createRange();
+            const bar = tank.querySelector('.tank-bar').getBoundingClientRect();
+            if (bar.width < innerWidth * 0.35 || bar.height < 80) return 'beside a level bar too thin to see';
+            const box = (el) => {  // a split title is measured by its letters (see the worlds above)
+              const ls = [...el.querySelectorAll('.c')].map((l) => l.getBoundingClientRect());
+              if (!ls.length) { r.selectNodeContents(el); return r.getBoundingClientRect(); }
+              return {left: Math.min(...ls.map(b => b.left)), right: Math.max(...ls.map(b => b.right)),
+                      top: Math.min(...ls.map(b => b.top)), bottom: Math.max(...ls.map(b => b.bottom))};
+            };
+            const boxes = [...tank.querySelectorAll('.tank-view > h3, .tank-steps li:nth-child(3)')].map(box)
+              .concat(tank.querySelector('.tank-level').getBoundingClientRect());
+            if (boxes.some((b) => b.right > bar.left && b.left < bar.right && b.bottom > bar.top && b.top < bar.bottom)) return 'into the level bar';
+            const nav = document.querySelector('.nav').getBoundingClientRect().bottom;
+            return boxes.some((b) => b.top < nav || b.bottom > innerHeight) ? 'off the screen' : ''""")
+        assert not bad, f"{w}x{h}: the tank's words run {bad}"
     driver.set_window_size(1440, 900)
     time.sleep(0.4)
+
+    # Spin the plate: the reward is picked by the brief's odds and the plate stops with it under the pin,
+    # every spin earns 5 XP, and a quick sideways throw spins it too
+    def plate_turn():
+        return js("return parseFloat(getComputedStyle(document.querySelector('.plate')).rotate) || 0")
+
+    jump(js("return document.querySelector('.plate-wrap').getBoundingClientRect().top + scrollY - 100"))
+    xp = int(js("return document.querySelector('.xp b').textContent"))
+    js("window.realRandom = Math.random; Math.random = () => 0.0019")  # rolls 1.9 in 1,000: the one-in-500 slice
+    driver.find_element(By.CSS_SELECTOR, ".spin-go").click()
+    assert js("return document.querySelector('.spin-go').disabled"), "Spin should wait while the plate spins"
+    time.sleep(4.6)
+    js("Math.random = window.realRandom")
+    landed = plate_turn() % 360
+    assert min(landed, 360 - landed) < 360 / 16, f"the plate should stop with the 30% slice under the pin, it's {landed:.1f}° round"
+    assert js("return document.querySelector('.spin-result b').textContent") == "Rare! 30% off", "the rare reward should show"
+    assert js("return [...document.querySelectorAll('.p-seg')].findIndex((g) => g.classList.contains('is-won'))") == 0, \
+        "the slice it landed on should light up"
+    assert int(js("return document.querySelector('.xp b').textContent")) == min(50, xp + 5), "a spin should earn 5 XP"
+    px, py = js("const b = document.querySelector('.plate-wrap').getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 4]")
+    before = plate_turn()
+    mouse("mouseMoved", px - 120, py)
+    mouse("mousePressed", px - 120, py, button="left", clickCount=1)
+    for n in range(1, 9):
+        mouse("mouseMoved", px - 120 + 30 * n, py, button="left", buttons=1)
+        time.sleep(0.016)
+    mouse("mouseReleased", px + 120, py, button="left", clickCount=1)
+    time.sleep(1)
+    assert plate_turn() - before > 360, f"a throw to the right above the middle should spin the plate clockwise, it turned {plate_turn() - before:.0f}°"
+    time.sleep(4.5)
+    assert js("return document.querySelector('.spin-result').textContent"), "the thrown plate should land on a reward"
 
     # The photos of people training all load (the lazy ones once scrolled to); each mode shows its own
     def photos_load(label):
@@ -310,6 +392,26 @@ try:
         assert not broken, f"{label}: photos failed to load: {broken}"
 
     photos_load("Clean")
+
+    # Whatever has played its entrance shows: nothing is left invisible
+    def nothing_stuck(label):
+        end = js("return document.documentElement.scrollHeight - innerHeight")
+        for y in range(0, int(end) + 1, int(vh * 0.6)):
+            jump(y)
+        time.sleep(1.5)
+        stuck = js("""return [...document.querySelectorAll('.reveal.is-in, [data-anim].is-in, [data-anim~=cards].is-in > *, [data-anim~=deal].is-in > *')]
+            .filter((el) => el.checkVisibility() && getComputedStyle(el).opacity === '0').map((el) => el.tagName + '.' + el.className)""")
+        assert not stuck, f"{label}: played its entrance but still invisible: {stuck}"
+        # Firefox (on a GPU) draws a 3D carton in loose pieces when any parent is turned
+        tilted = js("""return [...document.querySelectorAll('.box')].filter((box) => {
+            for (let el = box.parentElement; el; el = el.parentElement) {
+              const cs = getComputedStyle(el), m = new DOMMatrix(cs.transform === 'none' ? undefined : cs.transform);
+              if (cs.rotate !== 'none' || m.b || m.c) return true;
+            }
+          }).map((box) => box.textContent)""")
+        assert not tilted, f"{label}: cartons inside a tilted parent: {tilted}"
+
+    nothing_stuck("Clean")
 
     # Manga: picking it jumps to the top, then the 3D power-up hero stays pinned while --power
     # climbs to the final form
@@ -384,6 +486,7 @@ try:
     revealed = js("return [...document.querySelectorAll('.strip-panels li')].filter((li) => li.classList.contains('is-in')).length")
     assert revealed == 3, f"{revealed} of 3 comic panels revealed"
     photos_load("Manga")
+    nothing_stuck("Manga")
     js("document.documentElement.dataset.mode = 'clean'")
 
     # Phones: links live behind the Menu button; product cards swipe sideways
@@ -429,8 +532,8 @@ try:
         page_shots(f"{m}-desktop", 1440)
         page_shots(f"{m}-mobile", 390)
 
-    # A portrait iPad with touch: finger swipes play the pinned scenes (the gates and the creatine tank
-    # in Clean, the power-up in Manga) while their stages hold still
+    # A portrait iPad with touch: Clean scrolls natively, a sideways swipe spins the orbit, and in Manga finger
+    # swipes charge the power-up while its stage holds still
     def swipe(dy, x=380, y0=800):
         driver.execute_cdp_cmd("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [{"x": x, "y": y0}]})
         for k in range(1, 21):
@@ -444,27 +547,27 @@ try:
     js("localStorage.setItem('rsw-mode', 'clean')")
     driver.refresh()
     time.sleep(1.5)
-    for sel in (".gates", ".tank"):
-        jump(js(f"return document.querySelector('{sel}').getBoundingClientRect().top + scrollY"))
-        played = []
-        for _ in range(3):
-            swipe(400)
-            played.append(js(f"const e = document.querySelector('{sel}'); return [parseFloat(e.style.getPropertyValue('--s')), e.firstElementChild.getBoundingClientRect().top]"))
-        assert all(top == 0 for _, top in played) and played[0][0] > 0.05 and played[0][0] < played[1][0] < played[2][0], f"swipes should play {sel} while it holds: {played}"
+    srcs = js("return [...document.querySelectorAll('.slide-photo')].map((i) => i.currentSrc)")
+    assert len(srcs) == 2 and all(src.endswith("-tall.webp") for src in srcs), f"an upright screen should get the upright crops: {srcs}"
+    assert not js("return document.documentElement.classList.contains('lenis')"), \
+        "touch screens should scroll natively: Lenis's blocking touch listeners make swipes wait"
     # A sideways swipe on the orbit spins the worlds and leaves the page where it is
     jump(js("return document.querySelector('.gates').getBoundingClientRect().top + scrollY"))
     time.sleep(1)
-    k = front(".hub")
-    x, y = planets(".hub")[k][:2]
+    ps = planets(".hub")
+    k = min((i for i in range(3) if ps[i][2] > 1), key=lambda i: ps[i][0])  # the leftmost in front, which a swipe right carries right
+    x, y = ps[k][:2]
     held = js("return scrollY")
     driver.execute_cdp_cmd("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [{"x": x, "y": y}]})
     for n in range(1, 21):
         driver.execute_cdp_cmd("Input.dispatchTouchEvent", {"type": "touchMove", "touchPoints": [{"x": x + 15 * n, "y": y}]})
         time.sleep(0.016)
     driver.execute_cdp_cmd("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+    moved = planets(".hub")[k][0] - x  # as the finger lifts: the throw then carries the worlds on round
     time.sleep(0.3)
-    assert js("return scrollY") == held, "a sideways swipe on the orbit should not scroll the page"
-    assert planets(".hub")[k][0] - x > 100, "a sideways swipe should spin the worlds"
+    after = js("return scrollY")
+    assert after == held, f"a sideways swipe on the orbit should not scroll the page: {held} -> {after}"
+    assert moved > 100, f"a sideways swipe should spin the worlds: the front one moved {moved:.0f}px"
 
     js("localStorage.setItem('rsw-mode', 'manga')")
     driver.refresh()
@@ -496,7 +599,7 @@ try:
             assert min(room) >= 0, f"on a sideways phone the hero's words should fit between the bar and the bottom, room {room}"
     driver.execute_cdp_cmd("Emulation.clearDeviceMetricsOverride", {})
 
-    # AI Sensei chat: the launcher keeps off the hero and the pinned scenes; the chat asks the brief's three
+    # AI Sensei chat: the launcher keeps off the hero and the footer; the chat asks the brief's three
     # questions, reads typed answers (Hinglish too), asks again rather than guess at a "no", builds a plan
     # whose pick goes in the cart, and answers shop questions with the page's own prices
     driver.set_window_size(1440, 900)
@@ -509,9 +612,9 @@ try:
     driver.find_element(By.CSS_SELECTOR, '.nav-links a[href="#lab"]').click()
     time.sleep(2)
     assert launcher.is_displayed(), "after the Shop link, the Sensei launcher should show over the shop"
-    jump(js("const g = document.querySelector('.gates'); return g.getBoundingClientRect().top + scrollY + 0.3 * (g.offsetHeight - innerHeight)"))
+    jump(js("return document.querySelector('.footer').getBoundingClientRect().top + scrollY"))
     time.sleep(0.5)
-    assert not launcher.is_displayed(), "the Sensei launcher should keep off the pinned gates"
+    assert not launcher.is_displayed(), "the Sensei launcher should keep off the footer and its contact links"
     jump(js("return document.querySelector('#lab').getBoundingClientRect().top + scrollY"))
     time.sleep(0.5)
     launcher.click()
@@ -610,6 +713,15 @@ try:
     jump(js("return document.querySelector('.hub .orbit').getBoundingClientRect().top + scrollY - 100"))
     time.sleep(0.5)
     assert not drifts(".hub"), "the worlds should hold still with reduced motion"
+    js("document.querySelector('.spin-go').click()")
+    time.sleep(0.2)
+    assert js("return document.querySelector('.spin-result').textContent"), "with reduced motion the plate should land at once"
+    covered = js("""return [...document.querySelectorAll('[data-anim]')].filter((el) => el.checkVisibility() && (
+        getComputedStyle(el).opacity !== '1'
+        || (el.matches('[data-anim~=slash]') && getComputedStyle(el, '::after').content !== 'none')
+        || (el.matches('[data-anim~=curtain]') && getComputedStyle(el, '::before').content !== 'none')
+        || [...el.querySelectorAll('.c')].some((c) => !['none', '0px'].includes(getComputedStyle(c).translate)))).length""")
+    assert covered == 0, f"{covered} entrances hide or shift things with reduced motion"
 
     # No script errors anywhere along the way (the browser's own WebGL performance notes aside)
     errors = [e["message"] for e in driver.get_log("browser") if e["level"] == "SEVERE" and "GL Driver Message" not in e["message"]]

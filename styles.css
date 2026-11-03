@@ -69,6 +69,48 @@
   color-scheme: dark;
 }
 
+/* Clean is black and white, in a full range of greys rather than two flat tones, with one RSW red: the
+   brand's colours turn to ink, silver and paper there (Manga keeps its own), and crimson becomes a bold
+   red, so everything built from them follows: buttons, fields, cartons and planets. Photos get a toning
+   curve (#clean-tone in index.html): deep blacks, bright highlights. */
+[data-mode="clean"] {
+  --coal: #0c0c0d; /* ink */
+  --crimson: #d0021b; /* RSW red */
+  --ember: #b8b8bc; /* silver */
+  --flare: #ff5a6a; /* light red, for small touches on the dark */
+  --cream: #efefed; /* paper */
+  --surface: #f9f9f8;
+  --muted: #5d5d62;
+  --accent: var(--crimson);
+  --accent-text: #c4001a;
+  --accent-ink: #fff;
+  --line: rgb(12 12 13 / 0.1);
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 14px 40px rgb(0 0 0 / 0.1);
+}
+
+[data-mode="clean"] img {
+  filter: url("#clean-tone");
+}
+
+/* A fine film grain over all of Clean; it stays put, so scrolling never redraws it */
+[data-mode="clean"] body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.55 0'/></filter><rect width='200' height='200' filter='url(%23g)'/></svg>") 0 0 / 200px 200px;
+  opacity: 0.18;
+  pointer-events: none;
+}
+
+/* The filter's own svg takes no room (display: none would switch the filter off in some browsers) */
+.tones {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
 /* ==========================================================================
    Base
    ========================================================================== */
@@ -83,6 +125,14 @@ html {
   scroll-behavior: smooth;
   scroll-padding-top: calc(5rem + var(--promo)); /* clears the fixed nav */
   scrollbar-color: var(--accent) var(--bg);
+}
+
+/* Touch screens scroll without Lenis (main.js), so a sideways drag, like spinning the orbit, could be
+   taken for a swipe back through history */
+@media (pointer: coarse) {
+  html {
+    overscroll-behavior-x: none;
+  }
 }
 
 body {
@@ -167,7 +217,7 @@ a {
   flex-direction: column;
 }
 
-[data-mode="clean"] :is(.marquee, #story, #universe, .soon) {
+[data-mode="clean"] :is(.marquee, #story, #universe, .soon, .spin) {
   order: 1;
 }
 
@@ -571,15 +621,18 @@ h3 {
 
 /* ==========================================================================
    Hero: index.html holds one per mode (see Modes).
-   Clean: a shop banner, a dark card with the product boxes on a red glow.
-   Lines rise in, the boxes spin in, and the timer bar drives the 5 s slides.
+   Clean: a full-screen banner of three scenes, changing every 5 s: the range
+   on a red glow, then two photos. Each new scene pushes in over the last behind
+   a red edge, its photo settling as it comes; its title rises letter by letter
+   and the boxes spin in. The active control's bar drives the timing.
    Manga: a dark stage where the 3D tub powers up (hero.js draws it). When
    motion is welcome the hero is a tall track: the stage pins to the screen
    while main.js turns the scroll into --power, 0 → 1, and adds .is-charging
    and .is-final. The stage moves with transform and opacity only.
    ========================================================================== */
 
-/* Labels and ledes follow the banner's cream text, like a room. --bx is its side padding. */
+/* Clean's banner fills the screen below the nav. Labels and ledes follow its cream text, like a room.
+   --bx is its side padding. */
 .slider {
   --bx: clamp(1.25rem, 5vw, 5rem);
   --accent-text: currentColor;
@@ -588,11 +641,8 @@ h3 {
   isolation: isolate;
   overflow: hidden;
   display: grid;
-  align-content: center;
-  min-height: min(42rem, 100svh - 8rem - var(--promo));
-  margin: calc(4.75rem + var(--promo)) clamp(0.75rem, 2vw, 2rem) 0;
-  padding: clamp(2rem, 5vw, 4rem) var(--bx) 5rem;
-  border-radius: var(--radius);
+  min-height: calc(100svh - 4.75rem - var(--promo));
+  margin-top: calc(4.75rem + var(--promo));
   background: var(--coal);
   color: var(--cream);
 }
@@ -601,64 +651,55 @@ h3 {
   display: grid;
 }
 
-/* Slides share one grid cell, so the shorter one must not stretch its rows or button */
+/* Slides share one grid cell. Each is a whole scene with its own ground, so the next can cover it. */
 .slide {
   grid-area: 1 / 1;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: grid;
-  align-content: start;
-  align-items: start;
-  justify-items: start;
-  gap: 2rem;
-  opacity: 0;
+  align-content: end;
+  align-items: end;
+  gap: 1rem 2rem;
+  padding: clamp(2rem, 5vw, 4rem) var(--bx) 7rem;
+  background: radial-gradient(110% 90% at 78% 45%, #29292c, var(--coal) 62%);
   visibility: hidden;
-  transition:
-    opacity 0.4s var(--ease),
-    visibility 0s 0.4s;
+}
+
+/* The scene on show, and the one it is covering while it comes in */
+.slide.is-active,
+.slide.was-active {
+  visibility: visible;
 }
 
 .slide.is-active {
-  opacity: 1;
-  visibility: visible;
-  transition-delay: 0s;
+  z-index: 2;
 }
 
-/* Lines of the active slide enter one after another; --n is the stagger step */
-.slide.is-active .slide-copy > * {
-  animation: rise 0.9s var(--ease) calc(var(--n, 0) * 0.08s) backwards;
+.slide.was-active {
+  z-index: 1;
 }
 
-.slide-copy > :nth-child(2) {
-  --n: 1;
-}
-
-.slide-copy > :nth-child(3) {
-  --n: 2;
-}
-
-.slide-copy > :nth-child(4) {
-  --n: 3;
-}
-
-/* The headline is sized to its column (about 9 em wide for "REAL SAIYAN.") */
+/* The headline is sized to its column (about 9.5 em wide for "REAL SAIYAN.") */
 .slide-copy {
   container-type: inline-size;
-  justify-self: stretch;
   display: grid;
   justify-items: start;
   gap: 1.25rem;
 }
 
 .slider .display {
-  font-size: min(10.5cqi, 4.5rem);
+  font-size: 10cqi;
 }
 
 .slider .overline {
   color: var(--flare);
 }
 
-/* Ember to flare: the fiery word glows on the dark card */
+/* Solid red, so each letter can rise on its own */
 .slider .fire {
-  background-image: linear-gradient(90deg, var(--ember), var(--flare));
+  background: none;
+  color: #ff3348;
 }
 
 .actions {
@@ -669,7 +710,8 @@ h3 {
   font-weight: 800;
 }
 
-/* Slide 2: a dark gym shot fills the card behind the words and the box */
+/* A photo scene: the picture fills it and fades into the dark behind the words. Toned already, so the
+   page's photo filter is off. */
 .slide-photo {
   position: absolute;
   inset: 0;
@@ -677,9 +719,32 @@ h3 {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: var(--focus, 50% 50%);
+  mask-image: linear-gradient(to top, transparent, #000 65%);
 }
 
-/* Slide 1 shows the range, slide 2 creatine alone. Under 900px the boxes follow the text. */
+[data-mode="clean"] .slide-photo {
+  filter: none;
+}
+
+.slide:has(.slide-photo) {
+  background: var(--coal);
+}
+
+/* Its <picture> (which picks the upright crop) frames the photo, out of the layout */
+.slide picture {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+}
+
+@media (orientation: portrait) {
+  .slide-photo {
+    object-position: 50% 20%;
+  }
+}
+
+/* The range on a red glow. Under 900px the boxes follow the words. */
 .showcase {
   position: relative;
   container-type: inline-size;
@@ -696,9 +761,8 @@ h3 {
   background: radial-gradient(closest-side, color-mix(in srgb, var(--crimson) 70%, transparent), transparent);
 }
 
-/* The boxes turn further as the hero scrolls away (main.js sets --out) */
 .showcase .product {
-  --spin: calc(var(--base) + var(--out, 0) * 150deg);
+  --spin: var(--base);
   position: absolute;
 }
 
@@ -730,48 +794,88 @@ h3 {
   left: 33%;
 }
 
-/* Creatine on its own, bigger and centred, on a brighter glow so the black box stands out */
-.showcase.solo::before {
-  background: radial-gradient(closest-side, var(--crimson), color-mix(in srgb, var(--crimson) 35%, transparent) 60%, transparent);
+/* Clean lights the cartons from behind in red */
+[data-mode="clean"] .showcase::before {
+  background: radial-gradient(closest-side, rgb(208 2 27 / 0.5), transparent);
 }
 
-.showcase.solo .product {
-  --w: 36cqi;
-  --base: -30deg;
-  bottom: 8%;
-  left: 32%;
-}
-
-/* The boxes spin in one after another whenever their slide appears */
+/* The boxes spin in one after another whenever their scene appears */
 .slide.is-active .product {
-  animation: box-in 1.3s var(--ease) calc(0.3s + var(--i) * 0.15s) backwards;
+  animation: box-in 1.3s var(--ease) calc(var(--d, 0s) + 0.3s + var(--i) * 0.15s) backwards;
 }
 
-/* Wide screens: the words on the left, the boxes on the right. Sized by screen height so
-   the banner fits a laptop. */
+/* Wide screens: the words at the bottom left. The range stands beside them; a photo's subject is on its
+   right, so the photo fades out to the left instead. */
 @media (min-width: 56.25rem) {
   .slide {
     grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-    align-items: center;
     column-gap: var(--gutter);
   }
 
+  /* A photo's words can take more room: its subject stands further right */
+  .slide:has(.slide-photo) {
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.7fr);
+  }
+
+  .slide-photo {
+    mask-image: linear-gradient(to right, transparent 8%, #000 55%);
+  }
+
   .showcase {
+    align-self: center;
     justify-self: center;
-    width: min(100%, 55svh);
+    width: min(100%, 68svh);
   }
 }
 
+/* The controls: one bar per scene, the active one filling over 5 s; the scene changes when it is full */
 .hero-controls {
   position: absolute;
-  bottom: 1.25rem;
-  left: var(--bx);
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
+  inset: auto var(--bx) 1.5rem;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  align-items: end;
+  gap: 1rem;
 }
 
-.dot,
+.dot {
+  position: relative;
+  padding: 0.75rem 0 1rem;
+  border: 0;
+  background: linear-gradient(color-mix(in srgb, currentColor 25%, transparent) 0 0) bottom / 100% 2px no-repeat;
+  color: inherit;
+  font: 600 0.7rem / 1.2 var(--body);
+  letter-spacing: 0.14em;
+  text-align: left;
+  text-transform: uppercase;
+  opacity: 0.6;
+  cursor: pointer;
+  transition: opacity 0.3s var(--ease);
+}
+
+.dot:hover,
+.dot[aria-current="true"] {
+  opacity: 1;
+}
+
+.dot i {
+  position: absolute;
+  inset: auto 0 0;
+  height: 2px;
+  background: var(--crimson);
+  scale: 0 1;
+  transform-origin: left;
+}
+
+.dot[aria-current="true"] i {
+  animation: tick 5s linear forwards;
+}
+
+.slider:is(.is-paused, .is-away) .dot i {
+  animation-play-state: paused;
+}
+
 .pause {
   display: grid;
   place-items: center;
@@ -781,44 +885,97 @@ h3 {
   border: 0;
   background: none;
   color: inherit;
+  font-size: 0.75rem;
   cursor: pointer;
 }
 
-.dot::before {
-  content: "";
-  width: 12px;
-  height: 12px;
-  border: 2px solid;
-  border-radius: 50%;
+/* Narrow phones: the bars without their names */
+@media (max-width: 26rem) {
+  .dot b {
+    display: none;
+  }
 }
 
-.dot[aria-current="true"]::before {
-  background: currentColor;
-}
+/* The change of scene, when motion is welcome. The new one pushes in from the right behind a red edge
+   while the old one sinks back into the dark; the new photo drifts in slower than its scene (depth) and
+   settles from a zoom. Then the title rises letter by letter and the rest follows. */
+@media (prefers-reduced-motion: no-preference) {
+  .slide::before,
+  .slide::after {
+    content: "";
+    position: absolute;
+    z-index: 3;
+    pointer-events: none;
+    opacity: 0;
+  }
 
-.pause {
-  font-size: 0.75rem;
-}
+  .slide::before {
+    inset: 0 auto 0 0;
+    width: clamp(6px, 0.7vw, 12px);
+    background: var(--crimson);
+    box-shadow: 0 0 2.5rem 0.5rem rgb(208 2 27 / 0.55);
+  }
 
-/* The timer bar drives the slider: main.js moves on when its animation ends */
-.timer {
-  width: 80px;
-  height: 3px;
-  margin-left: 0.5rem;
-  background: color-mix(in srgb, currentColor 25%, transparent);
-}
+  .slide::after {
+    inset: 0;
+    background: #000;
+  }
 
-.timer span {
-  display: block;
-  height: 100%;
-  background: var(--accent);
-  scale: 0 1;
-  transform-origin: left;
-  animation: tick 5s linear forwards;
-}
+  .slider.has-moved .slide.is-active {
+    --d: 0.55s;
+    animation: slide-push 1.1s var(--ease-io) both;
+  }
 
-.slider.is-paused .timer span {
-  animation-play-state: paused;
+  .slider.has-moved .slide.is-active::before {
+    animation: slide-edge 1.1s var(--ease-io) both;
+  }
+
+  .slider.has-moved .slide.was-active {
+    animation: slide-sink 1.1s var(--ease-io) both;
+  }
+
+  .slider.has-moved .slide.was-active::after {
+    animation: slide-dim 1.1s var(--ease-io) both;
+  }
+
+  .slider.has-moved .slide.is-active .slide-photo {
+    animation:
+      photo-push 1.1s var(--ease-io) both,
+      photo-settle 6s var(--ease) both;
+  }
+
+  .slide.is-active .slide-photo {
+    animation: photo-settle 6s var(--ease) both;
+  }
+
+  /* Each word masks its letters as they come up */
+  .slider .display .w {
+    display: inline-block;
+    overflow: clip;
+    padding-block: 0.1em;
+    margin-block: -0.1em;
+    vertical-align: bottom;
+  }
+
+  .slider .display .c {
+    display: inline-block;
+  }
+
+  .slide.is-active .display .c {
+    animation: letter-up 0.9s var(--ease) calc(var(--d, 0s) + var(--i) * 26ms) backwards;
+  }
+
+  .slide.is-active .slide-copy > :not(.display) {
+    animation: rise 0.9s var(--ease) calc(var(--d, 0s) + 0.35s + var(--n, 0) * 0.08s) backwards;
+  }
+
+  .slide-copy > :nth-child(3) {
+    --n: 1;
+  }
+
+  .slide-copy > :nth-child(4) {
+    --n: 2;
+  }
 }
 
 .hero {
@@ -1113,6 +1270,38 @@ h3 {
   animation: marquee 30s linear infinite;
 }
 
+/* Clean: the black tape runs right under the red one running left, both a little wider than the screen
+   so their tilted ends never show */
+[data-mode="clean"] .marquee {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr); /* the screen's width, not the long text's */
+  padding-block: clamp(2.5rem, 5vw, 4.5rem);
+  overflow: clip;
+  background: none;
+  font-size: clamp(1.4rem, 3.6vw, 3.25rem);
+}
+
+.tape {
+  grid-area: 1 / 1;
+  z-index: 1;
+  margin-inline: -5vw;
+  padding-block: 0.35em;
+  overflow: clip;
+  background: var(--crimson);
+  color: #fff;
+  rotate: -2.5deg;
+}
+
+.tape + .tape {
+  z-index: 0;
+  background: var(--coal);
+  rotate: 2.5deg;
+}
+
+.tape + .tape .marquee-track {
+  animation-direction: reverse;
+}
+
 [data-mode="manga"] .marquee {
   border-block: 3px solid var(--ink);
   background: var(--accent);
@@ -1156,6 +1345,11 @@ h3 {
 
 [data-mode="manga"] .panel:nth-child(even) {
   rotate: 1deg;
+}
+
+/* …except the shop's cards: Firefox draws a 3D carton inside a tilted parent in loose pieces */
+[data-mode="manga"] .panel:has(.box) {
+  rotate: none;
 }
 
 /* ==========================================================================
@@ -1233,6 +1427,10 @@ h3 {
   height: calc(var(--w) * 0.4);
   translate: -50% 50%;
   background: radial-gradient(closest-side, rgb(70 15 15 / 0.32), transparent);
+}
+
+[data-mode="clean"] .product::before {
+  background: radial-gradient(closest-side, rgb(0 0 0 / 0.32), transparent);
 }
 
 .box {
@@ -1436,17 +1634,6 @@ h3 {
   text-transform: uppercase;
 }
 
-/* Clean: the statement lights up, reading order, as you scroll it in (main.js sets --p).
-   The soft edge overshoots both ends so p = 0 is all grey and p = 1 is all ink. */
-[data-mode="clean"] .highlight {
-  background:
-    linear-gradient(90deg, var(--ink) calc(var(--p, 1) * 110% - 9%), transparent calc(var(--p, 1) * 110% + 1%)),
-    color-mix(in srgb, var(--ink) 20%, var(--bg));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
 /* ==========================================================================
    Universe: index.html holds both looks (see Modes). Both have the orbit: three
    worlds circling the RSW logo (see "The orbit" below).
@@ -1467,58 +1654,77 @@ h3 {
   justify-self: center;
 }
 
-/* Clean: starts as a rounded card and grows to full width as it scrolls in (main.js sets --p).
-   The gates fill it edge to edge */
+/* Clean: the worlds fill it edge to edge; it grows from a rounded card the first time it comes into view
+   (see Clean's entrances) */
 [data-mode="clean"] .universe {
-  overflow: clip; /* rounds the gates' corners; unlike hidden, it keeps the stage sticky */
+  overflow: clip; /* rounds the worlds' corners while it is a card */
   padding: 0;
-  border-radius: calc((1 - var(--p, 1)) * 3rem);
-  scale: calc(0.88 + 0.12 * var(--p, 1));
-  transform-origin: 50% 0;
 }
 
-/* Each world is a flat field of its own colour. Without motion they simply stack */
+/* Each world is a flat field of its own colour, its words on the left and its picture on the right.
+   Without motion they simply stack */
 .gates {
-  --dt: 18%; /* where the next gate stands while closed: insets from the top, right, bottom, left */
-  --dr: 10%;
-  --db: 12%;
-  --dl: 62%;
-  --door: 76% 53%; /* its middle, where the worlds zoom from */
   justify-self: stretch;
   text-align: left;
 }
 
+/* Each world is a screen of its own, lit from the top left and darker towards its edges */
 .gate {
   position: relative;
-  background: var(--field, var(--crimson));
+  display: grid;
+  min-height: 100svh;
+  overflow: clip; /* keeps a photo settling from its zoom inside its world */
+  background:
+    radial-gradient(120% 90% at 25% 15%, rgb(255 255 255 / 0.09), transparent 60%),
+    radial-gradient(140% 110% at 50% 50%, transparent 55%, rgb(0 0 0 / 0.14)),
+    var(--field, var(--crimson));
   color: var(--on, var(--cream));
 }
 
-/* The last world has no gate after it, so its sensei stands in an arch where the next door would be
-   (and peeks out of its own door while it is still closed) */
-.gate-photo {
-  position: absolute;
-  top: var(--dt);
-  left: var(--dl);
-  width: calc(100% - var(--dl) - var(--dr));
-  height: calc(100% - var(--dt) - var(--db));
-  object-fit: cover;
-  object-position: 30% 50%;
-  border-radius: 50vw 50vw 0 0;
+/* The hub glows red behind the logo */
+.gate.hub {
+  background:
+    radial-gradient(55% 50% at 50% 48%, rgb(208 2 27 / 0.4), transparent 70%),
+    radial-gradient(140% 110% at 50% 50%, transparent 50%, rgb(0 0 0 / 0.35)),
+    var(--coal);
 }
 
+.gate-photo {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 40%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 30% 50%;
+}
+
+/* The Lab's picture is its range of cartons */
+.gate-cartons {
+  display: grid;
+  align-content: center;
+  padding: calc(5rem + var(--promo)) 2rem 2rem 0;
+}
+
+/* --cover: the world before it, which covers it until it cuts in (see Clean's entrances) */
 .gate:nth-child(2) {
   --field: var(--cream);
   --on: var(--coal);
+  --cover: var(--coal);
 }
 
 .gate:nth-child(3) {
   --field: var(--coal);
+  --cover: var(--cream);
 }
 
 .gate:nth-child(4) {
-  --field: var(--flare);
+  --field: #8a8a8f; /* steel */
   --on: var(--coal);
+  --cover: var(--coal);
+}
+
+.gate:nth-child(5) {
+  --cover: #8a8a8f;
 }
 
 .gate-copy {
@@ -1532,7 +1738,7 @@ h3 {
 }
 
 /* svh: a world's words fit a short laptop screen. The last term keeps the longest word, WARRIORS
-   (about 7.1em), inside its 56% column, clear of the next door. */
+   (about 7.1em), inside its 56% column, clear of the picture. */
 .gate .h1 {
   font-size: clamp(2.25rem, min(7.5vw, 12svh, (100vw - 2 * var(--gutter)) * 0.0765), 8rem);
 }
@@ -1610,33 +1816,39 @@ h3 {
   text-align: right;
 }
 
-/* Portrait tablets: a wider, shorter door (same middle), so it reads as a gate rather than a slit */
-@media (min-width: 761px) and (orientation: portrait) {
-  .gates {
-    --dt: 24%;
-    --dr: 6%;
-    --db: 18%;
-    --dl: 58%;
-  }
-}
-
 @media (max-width: 760px) {
-  /* No room beside the words on phones */
-  .gate-photo {
-    display: none;
+  /* Phones: the picture fills what the words leave of the screen, under them */
+  .gate {
+    display: flex;
+    flex-direction: column;
   }
 
-  .gates {
-    --dt: 62%;
-    --dr: 30%;
-    --db: 5%;
-    --dl: 30%;
-    --door: 50% 79%;
+  .gate-photo {
+    position: static;
+    flex: 1 1 0;
+    width: 100%;
+    min-height: 0;
+  }
+
+  .gate-cartons {
+    place-items: center;
+    padding: 0 var(--gutter) 1.5rem;
+  }
+
+  .gate-cartons .showcase {
+    width: auto;
+    height: 100%;
+    max-width: 100%;
   }
 
   .gate-copy {
     grid-template-columns: minmax(0, 1fr);
     align-content: start;
+  }
+
+  .gate:not(.hub) .gate-copy {
+    min-height: 0;
+    padding-bottom: 1.5rem;
   }
 
   .hub .gate-copy {
@@ -1654,71 +1866,6 @@ h3 {
 @media (max-width: 760px) and (max-height: 600px) {
   .hub p:not(.orbit-hint) {
     display: none;
-  }
-}
-
-/* The scene: the stage holds for three screens while main.js runs --s from 0 to 1. Gate i opens
-   (--o: 0 to 1) through the first 70% of its quarter, growing from an arch to the whole screen;
-   its words zoom in from the door, and zoom past and fade as the next gate opens (--next).
-   Until then the gate is hidden; it grows out of its door while the world before it opens.
-   A screen under 501px tall (a phone held sideways) can't fit a world, so there they stack as
-   they do without motion. */
-@media (prefers-reduced-motion: no-preference) and (min-height: 501px) {
-  .js .gates {
-    height: 400svh;
-  }
-
-  .js .gates-stage {
-    position: sticky;
-    top: 0;
-    height: 100svh;
-    overflow: clip;
-  }
-
-  .js .gate {
-    --t: calc((var(--s, 0) * 4 - var(--i)) / 0.7); /* below 0 before it opens, above 1 after */
-    --o: clamp(0, var(--t), 1);
-    --c: calc(1 - var(--o)); /* how far the gate is still closed */
-    position: absolute;
-    inset: 0;
-    scale: clamp(0, 1.75 * var(--t) + 1.5, 1);
-    transform-origin: var(--door);
-    clip-path: inset(
-      calc(var(--dt) * var(--c)) calc(var(--dr) * var(--c)) calc(var(--db) * var(--c)) calc(var(--dl) * var(--c))
-        round calc(var(--c) * 50vw) calc(var(--c) * 50vw) 0 0
-    );
-  }
-
-  .js .gate-copy {
-    --next: clamp(0, (var(--s, 0) * 4 - var(--i) - 1) / 0.7, 1);
-    height: 100%;
-    opacity: calc(1 - 3 * var(--next));
-    scale: calc((0.8 + 0.2 * var(--o)) * (1 + 0.6 * var(--next)));
-    transform-origin: var(--door);
-  }
-
-  /* The first world, the Lab, opens out of its planet instead: a disc that grows from it to the whole
-     screen, while the hub zooms in after it. main.js brings the planet to the front and keeps its
-     middle in --lx / --ly and its radius in --lr. */
-  .js .hub .gate-copy,
-  .js .hub + .gate {
-    --door: var(--lx, 50%) var(--ly, 50%);
-  }
-
-  .js .hub + .gate {
-    scale: 1;
-    clip-path: circle(calc(min(1, var(--o) * 50) * var(--lr, 0px) + var(--o) * 150vmax) at var(--door));
-  }
-
-  /* Phones: the door sits below the words, so it only grows once they have faded */
-  @media (max-width: 760px) {
-    .js .gate {
-      scale: clamp(0, 5 * var(--t) - 0.5, 1);
-    }
-
-    .js .gate:not(.hub) .gate-copy {
-      opacity: calc(1 - 10 * var(--next));
-    }
   }
 }
 
@@ -1856,6 +2003,11 @@ h3 {
   --field: var(--flare);
   --on: var(--coal);
   translate: calc(80cqw - 50%) calc(38cqh - 50%);
+}
+
+/* Clean: a white ring keeps the black planet in sight on the black hub */
+[data-mode="clean"] .planet > span {
+  box-shadow: inset 0 0 0 2px var(--cream);
 }
 
 /* Manga: the orbit fills the chapter, on focus lines that shake while it's spun */
@@ -2005,9 +2157,47 @@ h3 {
   overflow: clip;
 }
 
-/* Clean's shop photos stay one size; the buy row's auto margin lines up the card bottoms */
+/* Clean's shop photos stay one size; the buy row's auto margin lines up the card bottoms. Each carton
+   stands on a block of colour (--stage, set per card) with its name huge behind it, bleeding off the
+   edges like a poster. */
 [data-mode="clean"] .stage {
+  position: relative;
+  isolation: isolate;
   flex-grow: 0;
+  aspect-ratio: 1;
+  background: var(--stage, var(--coal));
+}
+
+[data-mode="clean"] .stage::before {
+  content: attr(data-name);
+  position: absolute;
+  inset: 22% -10% auto;
+  z-index: -1;
+  color: rgb(255 255 255 / 0.14);
+  font: 900 27cqi / 0.8 var(--display);
+  font-stretch: 125%;
+  letter-spacing: -0.04em;
+  text-align: center;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* On the silver block the name is ink */
+[data-mode="clean"] .products li:nth-child(3) .stage::before {
+  color: rgb(12 12 13 / 0.12);
+}
+
+[data-mode="clean"] .stage .product {
+  --w: 40cqi;
+}
+
+[data-mode="clean"] .stage .product::before {
+  background: radial-gradient(closest-side, rgb(0 0 0 / 0.45), transparent);
+}
+
+/* Held by the mouse it follows the drag at once */
+.stage .product.is-turning {
+  transition: none;
 }
 
 .stage .product {
@@ -2075,10 +2265,16 @@ h3 {
 /* Creatine: index.html holds both looks (see Modes).
    Clean: a scroll scene where the screen fills and drains (below). Manga: a comic strip (after it). */
 
-/* Clean: a bar beside the words is the muscles' quick energy. Each step takes the first 70% of its third of
-   the hold (--s from main.js): training drains the level to 20%, creatine refills it to 60%, then
-   100%. --atp, a registered integer, rounds the level for the readout. Without motion the three
-   steps simply sit side by side. */
+/* Clean: a bar beside the words is the muscles' quick energy. The first time it comes into view it plays
+   like a short film (see the scene below): training drains the level to 20%, creatine refills it to
+   60%, then 100%. --level is registered so the keyframes can move it; --atp, a registered integer,
+   rounds it for the readout. Without motion the three steps simply sit side by side. */
+@property --level {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+
 @property --atp {
   syntax: "<integer>";
   inherits: true;
@@ -2086,10 +2282,6 @@ h3 {
 }
 
 .tank {
-  --f1: clamp(0, var(--s, 0) * 3 / 0.7, 1);
-  --f2: clamp(0, (var(--s, 0) * 3 - 1) / 0.7, 1);
-  --f3: clamp(0, (var(--s, 0) * 3 - 2) / 0.7, 1);
-  --level: calc(1 - 0.8 * var(--f1) + 0.4 * var(--f2) + 0.4 * var(--f3));
   --atp: calc(var(--level) * 100);
   margin: clamp(4rem, 8vw, 7rem) calc(-1 * var(--gutter)) 0;
 }
@@ -2127,19 +2319,19 @@ h3 {
   font-size: clamp(1.1rem, 1.6vw, 1.5rem);
 }
 
-/* The scene, on screens tall enough to hold it (not a phone held sideways) */
+/* The scene: a screen that plays once, the first time it comes into view (main.js adds .is-in). Not on
+   screens too short to hold it (a phone held sideways). */
 @media (prefers-reduced-motion: no-preference) and (min-height: 501px) {
-  .js .tank {
-    height: 300svh;
-  }
-
   .js .tank-stage {
     --bar: 40%;
-    position: sticky;
-    top: 0;
+    position: relative;
     height: 100svh;
     overflow: clip;
     background: var(--bg);
+  }
+
+  .js .tank.is-in {
+    animation: tank-level 6.5s var(--ease-io) 0.4s both;
   }
 
   /* The level is a bar of its own, a column on the right, so its line never runs through the words: an
@@ -2197,7 +2389,7 @@ h3 {
     letter-spacing: 0;
   }
 
-  /* One step at a time, all in the same spot */
+  /* One step at a time, all in the same spot, in time with the level */
   .js .tank-steps {
     grid-area: 3 / 1;
     grid-template-columns: minmax(0, 1fr);
@@ -2206,17 +2398,18 @@ h3 {
   .js .tank-steps li {
     grid-area: 1 / 1;
     opacity: 0;
-    translate: 0 1.5rem;
-    transition:
-      opacity 0.5s var(--ease),
-      translate 0.5s var(--ease);
   }
 
-  .js .tank[data-step="1"] li:nth-child(1),
-  .js .tank[data-step="2"] li:nth-child(2),
-  .js .tank[data-step="3"] li:nth-child(3) {
-    opacity: 1;
-    translate: none;
+  .js .tank.is-in li:nth-child(1) {
+    animation: tank-step-1 6.5s var(--ease) 0.4s both;
+  }
+
+  .js .tank.is-in li:nth-child(2) {
+    animation: tank-step-2 6.5s var(--ease) 0.4s both;
+  }
+
+  .js .tank.is-in li:nth-child(3) {
+    animation: tank-step-3 6.5s var(--ease) 0.4s both;
   }
 
   .js .tank-steps .h1 {
@@ -2420,11 +2613,11 @@ h3 {
   grid-column: 1 / -1;
 }
 
-/* Clean: chapter 4 takes Manga's comic look, a cream panel with an inked title in a red offset
-   shadow, a slanted red tag and a square, hard-shadowed button */
+/* Clean: chapter 4 takes Manga's comic look in Clean's colours, a pale panel with an inked title in a red
+   offset shadow, a slanted red tag and a square, hard-shadowed button */
 [data-mode="clean"] .warriors {
   --pill: 0;
-  background: #f6e9d3; /* Manga's cream */
+  background: linear-gradient(180deg, var(--surface), #e4e4e2);
   color: var(--coal);
 }
 
@@ -2451,7 +2644,11 @@ h3 {
   box-shadow: 8px 8px 0 var(--coal);
 }
 
-/* Clean: people training, a row of inked photos under the words */
+/* Clean: people training, a row of framed photos under the words, in full colour: real people, as they are */
+[data-mode="clean"] .warrior-shots img {
+  filter: none;
+}
+
 .warrior-shots {
   grid-column: 1 / -1;
   display: grid;
@@ -2597,7 +2794,7 @@ h3 {
 }
 
 .soon-photo.inked img {
-  filter: grayscale(1) contrast(1.35);
+  filter: contrast(1.35) url("#clean-tone");
 }
 
 .soon-photo.inked::after {
@@ -2606,6 +2803,211 @@ h3 {
   inset: 0;
   border-radius: var(--radius) var(--radius) 0 0;
   background: var(--halftone-dark);
+}
+
+/* ==========================================================================
+   Spin the plate: the brief's reward game (Clean). A gym plate stands in for
+   the wheel: main.js draws it, picks the reward by the brief's odds and lands
+   the plate on it. The plate is cast iron, so its greys are fixed colours.
+   ========================================================================== */
+
+.spin {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(2rem, 6vw, 6rem);
+}
+
+.spin-copy {
+  display: grid;
+  justify-items: start;
+  gap: 1.25rem;
+}
+
+.spin-copy > * {
+  margin: 0;
+}
+
+.xp {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  font: 800 0.85rem / 1 var(--body);
+  letter-spacing: 0.1em;
+}
+
+.xp b {
+  font: 900 2.5rem / 1 var(--display);
+  font-stretch: 125%;
+  letter-spacing: -0.02em;
+}
+
+.xp-bar {
+  width: 10rem;
+  height: 6px;
+  background: var(--line);
+}
+
+/* main.js sets --xp from 0 to 1 */
+.xp-bar span {
+  display: block;
+  height: 100%;
+  background: var(--ink);
+  scale: var(--xp, 0) 1;
+  transform-origin: left;
+  transition: scale 0.6s var(--ease);
+}
+
+.spin-result {
+  min-height: 2.6em;
+  font: 800 clamp(1.1rem, 2vw, 1.5rem) / 1.3 var(--body);
+}
+
+.spin-result b {
+  display: block;
+  font: 900 clamp(2.5rem, 6vw, 4.5rem) / 1 var(--display);
+  font-stretch: 125%;
+  text-transform: uppercase;
+}
+
+/* Sideways drags throw the plate; up and down still scroll the page */
+.plate-wrap {
+  position: relative;
+  justify-self: center;
+  width: min(100%, 34rem);
+  aspect-ratio: 1;
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: grab;
+}
+
+/* Its shadow on the floor stays put while it spins */
+.plate-wrap::before {
+  content: "";
+  position: absolute;
+  inset: 2%;
+  border-radius: 50%;
+  box-shadow: 0 2.5rem 4rem rgb(0 0 0 / 0.32);
+}
+
+.plate {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.p-iron {
+  fill: #1b1b1c;
+  stroke: #3d3d40;
+  stroke-width: 1.2;
+}
+
+.p-seg path {
+  fill: #131314;
+  stroke: #353538;
+  stroke-width: 0.6;
+}
+
+.p-seg.alt path {
+  fill: #232325;
+}
+
+.p-seg text {
+  fill: #efefed;
+  font: 900 11px / 1 var(--display);
+  font-stretch: 125%;
+  text-anchor: middle;
+}
+
+.p-seg .small {
+  fill: #9a9a9f;
+  font: 800 5.4px / 1 var(--body);
+  letter-spacing: 0.12em;
+}
+
+/* The rare rewards are stamped in RSW red */
+.p-seg.rare path {
+  fill: #d0021b;
+}
+
+.p-seg.rare text,
+.p-seg.rare .small {
+  fill: #fff;
+}
+
+/* The landed reward lights up */
+.p-seg.is-won path {
+  animation: won 0.45s ease-in-out 4 alternate;
+}
+
+/* The grips, three slots you lift a plate by; the page shows through them */
+.p-grip {
+  fill: var(--bg);
+  stroke: var(--bg);
+  stroke-width: 6;
+  stroke-linejoin: round;
+}
+
+.p-emboss {
+  fill: #58585c;
+  font: 800 4.4px / 1 var(--body);
+}
+
+.p-hub {
+  fill: #262628;
+  stroke: #444447;
+}
+
+.p-collar {
+  fill: #d4d4d6;
+}
+
+.p-hole {
+  fill: #0b0b0c;
+}
+
+/* The pin at the top that the plate's rewards pass under; it kicks as each one clicks past */
+.plate-pin {
+  position: absolute;
+  top: -1rem;
+  left: 50%;
+  width: 2rem;
+  translate: -50% 0;
+  transform-origin: 50% 10%;
+  overflow: visible;
+  fill: var(--cream);
+  stroke: var(--coal);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
+
+.plate-pin.is-kicked {
+  animation: kick 0.14s var(--ease);
+}
+
+/* A rare one floods the section black for a moment */
+.spin.is-rare::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--coal);
+  pointer-events: none;
+  animation: rare 1.4s var(--ease) forwards;
+}
+
+@media (max-width: 56.25rem) {
+  .spin {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .plate-wrap {
+    width: min(100%, 26rem);
+  }
 }
 
 /* ==========================================================================
@@ -2618,6 +3020,11 @@ h3 {
   gap: 2.5rem;
   padding: clamp(5rem, 10vw, 8rem) var(--gutter) 2rem;
   border-radius: 50% 50% 0 0 / var(--arch) var(--arch) 0 0;
+}
+
+/* Clean's dark surfaces are lit, not flat: graphite where the light falls, ink at the edges */
+[data-mode="clean"] .footer {
+  background: radial-gradient(100% 140% at 15% 0%, #2c2c2f, var(--coal) 70%);
 }
 
 .contact,
@@ -2649,92 +3056,319 @@ h3 {
   font-size: 0.8rem;
 }
 
+/* Sized to fill the footer's width ("RSW" is about 2.98 em wide); the bottom of the letters runs off the page */
+[data-mode="clean"] .footer {
+  container-type: inline-size;
+  overflow: clip;
+}
+
+.footer-mark {
+  margin: 1rem 0 -0.16em;
+  color: var(--crimson);
+  font: 900 calc(100cqi / 2.98) / 0.8 var(--display);
+  font-stretch: 125%;
+  letter-spacing: -0.03em;
+  text-align: center;
+  user-select: none;
+}
+
+/* Each letter lifts under the mouse */
+@media (hover: hover) {
+  .footer-mark .c {
+    transition: translate 0.5s var(--ease-back);
+  }
+
+  .js[data-mode="clean"] .footer-mark.is-in .c:hover {
+    translate: 0 -0.08em;
+    transition-delay: 0s;
+  }
+}
+
 /* ==========================================================================
-   Mode dialog
+   Mode dialog: every visit opens on a full-screen "choose your mode", Clean
+   against Manga split by a slash, like a fighting game's select screen. The
+   side under the pointer (or focus) takes more of the screen. Each side
+   previews its own mode, so it uses fixed colours rather than tokens.
    ========================================================================== */
 
 .mode-dialog {
-  width: min(92vw, 40rem);
-  padding: clamp(1.5rem, 4vw, 2.5rem);
+  --slash: 7vw; /* how far the cut between the sides leans */
+  --split: 50%; /* where it crosses the middle of the screen */
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 0;
   border: 0;
-  border-radius: 24px;
-  background: var(--surface);
-  color: var(--ink);
-  box-shadow: 0 30px 80px rgb(0 0 0 / 0.3);
-  text-align: center;
-}
-
-.mode-dialog[open] {
-  animation: pop 0.5s var(--ease);
+  overflow: hidden;
+  background: #0b0b0b;
+  color: #f5f5f5;
 }
 
 .mode-dialog::backdrop {
-  background: rgb(20 10 10 / 0.55);
-  backdrop-filter: blur(6px);
+  background: #0b0b0b;
 }
 
-[data-mode="manga"] .mode-dialog {
-  border: 3px solid var(--ink);
-  border-radius: 0;
+.mode-dialog:focus {
+  outline: none;
+}
+
+/* The page behind stays put while it's open */
+html:has(.mode-dialog[open]) {
+  overflow: hidden;
+}
+
+/* The title across the top and the note along the bottom: white over Manga, black over Clean */
+.mode-dialog h2,
+.mode-note {
+  position: absolute;
+  inset-inline: 0;
+  z-index: 3;
+  margin: 0;
+  color: #fff;
+  mix-blend-mode: difference;
+  text-align: center;
+  pointer-events: none;
 }
 
 .mode-dialog h2 {
-  font-size: clamp(1.25rem, 4vw, 1.75rem);
+  top: clamp(1.25rem, 5svh, 3rem);
+  font: 800 clamp(0.75rem, 1.3vw, 1rem) / 1 var(--body);
+  letter-spacing: 0.45em;
+  text-transform: uppercase;
 }
 
-.mode-dialog > p {
-  color: var(--muted);
-  font-size: 0.85rem;
+.mode-note {
+  bottom: clamp(1rem, 3svh, 2rem);
+  font: 600 0.75rem / 1.4 var(--body);
+  letter-spacing: 0.08em;
 }
 
 .choices {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-  margin: 1.5rem 0 1rem;
+  height: 100%;
+  transition: grid-template-columns 0.6s var(--ease);
+}
+
+.mode-dialog:has(.choice-clean:is(:hover, :focus-visible)) {
+  --split: 63%;
+}
+
+.mode-dialog:has(.choice-manga:is(:hover, :focus-visible)) {
+  --split: 37%;
+}
+
+.mode-dialog:has(.choice-clean:is(:hover, :focus-visible)) .choices {
+  grid-template-columns: 1.7fr 1fr;
+}
+
+.mode-dialog:has(.choice-manga:is(:hover, :focus-visible)) .choices {
+  grid-template-columns: 1fr 1.7fr;
 }
 
 .choice {
+  position: relative;
+  isolation: isolate;
   display: grid;
-  gap: 0.4rem;
-  padding: 2rem 1rem;
-  border-radius: 16px;
+  align-content: end;
+  justify-items: start;
+  gap: 0.6rem;
+  min-width: 0;
+  padding: clamp(1.5rem, 6vw, 5rem) clamp(1.5rem, 6vw, 5rem) clamp(4.5rem, 13svh, 8rem);
+  border: 0;
+  overflow: hidden;
+  container-type: inline-size;
   font: inherit;
+  text-align: left;
   cursor: pointer;
-  transition: translate 0.25s var(--ease);
+  transition: filter 0.5s var(--ease);
 }
 
-.choice:hover {
-  translate: 0 -4px;
-}
-
-.choice b {
-  font-size: 1.6rem;
-}
-
-.choice span {
-  font-size: 0.85rem;
-}
-
-/* Each choice previews its own mode, so it uses fixed colours rather than tokens */
+/* The sides overlap where the slash cuts between them; Clean's edge is the cut */
 .choice-clean {
-  border: 1px solid rgb(29 20 20 / 0.15);
-  background: #faf3e6;
-  color: #1d1414;
+  z-index: 1;
+  margin-right: calc(-1 * var(--slash));
+  padding-right: calc(var(--slash) + 2rem);
+  background: #efefed;
+  color: #0c0c0d;
+  clip-path: polygon(0 0, 100% 0, calc(100% - var(--slash)) 100%, 0 100%);
 }
 
 .choice-manga {
-  border: 3px solid #f6e9d3;
-  border-radius: 0;
-  background: var(--speedlines), #1c1a1b;
+  justify-items: end;
+  margin-left: calc(-1 * var(--slash));
+  padding-left: calc(var(--slash) + 2rem);
+  background: var(--halftone-light), var(--speedlines), #1c1a1b;
   color: #f6e9d3;
-  box-shadow: 5px 5px 0 #c8102e;
-  transform: skew(-4deg);
+  text-align: right;
 }
 
-@media (max-width: 480px) {
-  .choices {
-    grid-template-columns: 1fr;
+/* The side not picked dims */
+.choices:has(.choice:is(:hover, :focus-visible)) .choice:not(:hover, :focus-visible) {
+  filter: brightness(0.45);
+}
+
+.choice img {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.3;
+  transition:
+    scale 0.8s var(--ease),
+    opacity 0.5s var(--ease);
+}
+
+.choice-clean img {
+  filter: url("#clean-tone");
+}
+
+.choice-manga img {
+  filter: grayscale(1) contrast(1.4);
+  opacity: 0.4;
+}
+
+.choice:is(:hover, :focus-visible) img {
+  opacity: 0.6;
+  scale: 1.06;
+}
+
+/* Sized by its side, so the name still fits when the other side takes the screen */
+.choice b {
+  font: 900 clamp(2.5rem, 13cqi, 9rem) / 0.85 var(--display);
+  font-stretch: 125%;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+}
+
+.choice-manga b {
+  text-shadow: 0.06em 0.06em 0 #c8102e;
+  transform: skew(-6deg);
+}
+
+.choice span {
+  max-width: 24ch;
+  font: 700 clamp(0.8rem, 1.2vw, 1.05rem) / 1.4 var(--body);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* "Enter" shows on the side under the pointer */
+.choice::after {
+  content: "Enter →";
+  font: 800 0.8rem / 1 var(--body);
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  opacity: 0;
+  translate: 0 0.5rem;
+  transition:
+    opacity 0.4s var(--ease),
+    translate 0.4s var(--ease);
+}
+
+.choice:is(:hover, :focus-visible)::after {
+  opacity: 1;
+  translate: 0 0;
+}
+
+/* マンガ (manga), down Manga's side in outlined red */
+.choice-manga i {
+  position: absolute;
+  top: 10%;
+  right: 5%;
+  z-index: -1;
+  color: transparent;
+  font: 400 clamp(4rem, 11vw, 10rem) / 1 var(--sfx);
+  font-style: normal;
+  -webkit-text-stroke: 2px #c8102e;
+  writing-mode: vertical-rl;
+}
+
+/* VS, on the middle of the cut */
+.versus {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--split) + var(--slash) / 2);
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: clamp(4rem, 7vw, 6rem);
+  aspect-ratio: 1;
+  margin: 0;
+  border: 3px solid #efefed;
+  border-radius: 50%;
+  background: #d0021b;
+  color: #fff;
+  font: italic 900 clamp(1.25rem, 2.2vw, 2rem) / 1 var(--display);
+  font-stretch: 125%;
+  translate: -50% -50%;
+  rotate: -8deg;
+  pointer-events: none;
+  transition: left 0.6s var(--ease);
+}
+
+/* It slams in: the sides from either edge, then the VS */
+.mode-dialog[open] .choice-clean {
+  animation: enter-left 0.8s var(--ease) both;
+}
+
+.mode-dialog[open] .choice-manga {
+  animation: enter-right 0.8s var(--ease) both;
+}
+
+.mode-dialog[open] .versus {
+  animation: vs-in 0.5s var(--ease-back) 0.45s both;
+}
+
+/* Upright screens stack the sides, Clean on top, and the cut runs across */
+@media (max-aspect-ratio: 1 / 1) {
+  .mode-dialog {
+    --slash: 6svh;
+  }
+
+  .choices,
+  .mode-dialog:is(:has(.choice-clean:is(:hover, :focus-visible)), :has(.choice-manga:is(:hover, :focus-visible))) .choices {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 1fr 1fr;
+  }
+
+  .choice {
+    padding: calc(var(--slash) + 4rem) 1.5rem 2rem;
+  }
+
+  .choice-clean {
+    margin: 0 0 calc(-1 * var(--slash));
+    padding-bottom: calc(var(--slash) + 1.5rem);
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--slash)), 0 100%);
+  }
+
+  .choice-manga {
+    justify-items: start;
+    margin: calc(-1 * var(--slash)) 0 0;
+    padding-bottom: 3.5rem;
+    text-align: left;
+  }
+
+  .choice-manga i {
+    top: calc(var(--slash) + 1rem);
+    font-size: clamp(3rem, 10svh, 6rem);
+  }
+
+  .versus {
+    top: calc(50% + var(--slash) / 2);
+    left: 50%;
+  }
+
+  .mode-dialog[open] .choice-clean {
+    animation-name: enter-top;
+  }
+
+  .mode-dialog[open] .choice-manga {
+    animation-name: enter-bottom;
   }
 }
 
@@ -2800,6 +3434,82 @@ h3 {
   translate: 0 1rem;
 }
 
+/* The music switch, bottom left (the chat launcher has the right): equaliser bars that dance while it
+   plays and lie flat when it's off */
+.sound-toggle {
+  position: fixed;
+  left: max(1rem, env(safe-area-inset-left));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--coal);
+  color: var(--cream);
+  box-shadow: 0 12px 32px rgb(29 20 20 / 0.28);
+  cursor: pointer;
+  transition: translate 0.3s var(--ease);
+}
+
+.sound-toggle[hidden] {
+  display: none;
+}
+
+/* The hero's slide bars start clear of it */
+body:has(.sound-toggle:not([hidden])) .hero-controls {
+  left: max(var(--bx), 4.75rem);
+}
+
+.sound-toggle:hover {
+  translate: 0 -3px;
+}
+
+[data-mode="manga"] .sound-toggle {
+  border: 3px solid var(--ink);
+  background: var(--bg);
+  color: var(--ink);
+  box-shadow: 5px 5px 0 var(--accent);
+}
+
+.sound-toggle i {
+  width: 3px;
+  height: 18px;
+  border-radius: 2px;
+  background: currentColor;
+  scale: 1 0.2;
+  transition: scale 0.3s var(--ease);
+}
+
+/* Playing: uneven bars, which bounce when motion is welcome */
+.sound-toggle[aria-pressed="true"] i {
+  scale: 1 0.7;
+  animation: eq 0.8s ease-in-out infinite alternate;
+}
+
+.sound-toggle[aria-pressed="true"] i:nth-of-type(2) {
+  scale: 1 1;
+  animation-duration: 0.55s;
+  animation-delay: -0.3s;
+}
+
+.sound-toggle[aria-pressed="true"] i:nth-of-type(3) {
+  scale: 1 0.5;
+  animation-duration: 0.7s;
+  animation-delay: -0.5s;
+}
+
+.sound-toggle[aria-pressed="true"] i:nth-of-type(4) {
+  scale: 1 0.85;
+  animation-duration: 0.6s;
+  animation-delay: -0.15s;
+}
+
 .chat-toggle-text {
   display: grid;
   gap: 0.2rem;
@@ -2857,6 +3567,12 @@ h3 {
 [data-mode="manga"] .chat-head .seal {
   background: var(--cream);
   color: var(--crimson);
+}
+
+/* Clean's stamp is red with a white mark, so it shows on the black header and launcher */
+[data-mode="clean"] .seal {
+  background: var(--accent);
+  color: #fff;
 }
 
 .chat-head h2 {
@@ -3354,8 +4070,9 @@ h3 {
 
 /* Things only start hidden when motion is welcome; otherwise they simply show */
 @media (prefers-reduced-motion: no-preference) {
-  /* Scroll reveals: soft in Clean, a slam in Manga. main.js adds .is-in */
-  .js .reveal {
+  /* Scroll reveals: soft in Clean, a slam in Manga. main.js adds .is-in. In Clean, whatever has an entrance
+     of its own (data-anim, below) skips it; :where() keeps that test from outweighing .is-in below */
+  .js .reveal:not(:where([data-mode="clean"] :is([data-anim], [data-anim~="cards"] > *))) {
     opacity: 0;
     translate: 0 30px;
     transition:
@@ -3379,6 +4096,159 @@ h3 {
   }
 }
 
+/* Clean's entrances: each plays once, the first time its element scrolls into view (data-anim in
+   index.html; main.js splits the letters and adds .is-in). Nothing waits on the scroll position, so
+   scrolling costs nothing. Only when motion is welcome, and with the script running. */
+@media (prefers-reduced-motion: no-preference) {
+  /* Letters rise one after another, straightening as they come up through their word, which masks them */
+  .js[data-mode="clean"] [data-anim~="letters"] .w {
+    display: inline-block;
+    overflow: clip;
+    padding-block: 0.1em; /* room inside the mask for accents and descenders */
+    margin-block: -0.1em;
+    vertical-align: bottom;
+  }
+
+  .js[data-mode="clean"] [data-anim~="letters"] .c {
+    display: inline-block;
+    translate: 0 115%;
+    rotate: 14deg;
+    transition:
+      translate 0.9s var(--ease) calc(var(--i) * 28ms),
+      rotate 0.9s var(--ease) calc(var(--i) * 28ms);
+  }
+
+  /* The footer's drop in from above and bounce */
+  .js[data-mode="clean"] [data-anim~="drop"] .c {
+    translate: 0 -115%;
+    rotate: -10deg;
+    transition-duration: 1.1s;
+    transition-timing-function: var(--ease-back);
+    transition-delay: calc(var(--i) * 40ms);
+  }
+
+  /* A world's title waits for its slash to pass */
+  .js[data-mode="clean"] .gate [data-anim~="letters"] .c {
+    transition-delay: calc(0.3s + var(--i) * 30ms);
+  }
+
+  .js[data-mode="clean"] [data-anim~="letters"].is-in .c {
+    translate: none;
+    rotate: none;
+  }
+
+  /* A photo's ink curtain lifts away while the photo settles from a zoom. Covers rather than clips: a
+     clipped photo counts as out of sight, so it would never load or play */
+  .js[data-mode="clean"] [data-anim~="curtain"] {
+    overflow: clip;
+  }
+
+  .js[data-mode="clean"] [data-anim~="curtain"]::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    border-radius: var(--radius);
+    background: var(--coal);
+    transform-origin: 50% 0;
+    transition: scale 1s var(--ease-io) 0.1s;
+    pointer-events: none;
+  }
+
+  .js[data-mode="clean"] .soon-photo[data-anim~="curtain"]::before {
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+
+  .js[data-mode="clean"] [data-anim~="curtain"].is-in::before {
+    scale: 1 0;
+  }
+
+  .js[data-mode="clean"] :is([data-anim~="curtain"] img, .gate-photo) {
+    transition: scale 1.8s var(--ease);
+  }
+
+  .js[data-mode="clean"] :is([data-anim~="curtain"]:not(.is-in) img, [data-anim~="slash"]:not(.is-in) .gate-photo) {
+    scale: 1.2;
+  }
+
+  /* A group's cards flip up, one after another */
+  .js[data-mode="clean"] [data-anim~="cards"]:not(.is-in) > * {
+    opacity: 0;
+  }
+
+  .js[data-mode="clean"] [data-anim~="cards"].is-in > * {
+    transform-origin: 50% 100%;
+    animation: card-in 1s var(--ease) calc(0.1s + var(--k, 0) * 90ms) backwards;
+  }
+
+  /* The Warriors' photos are dealt out from a stack in the middle */
+  .js[data-mode="clean"] [data-anim~="deal"]:not(.is-in) > * {
+    opacity: 0;
+  }
+
+  .js[data-mode="clean"] [data-anim~="deal"].is-in > * {
+    animation: deal 1.1s var(--ease) calc(var(--k, 0) * 110ms) backwards;
+  }
+
+  /* Each world cuts in on a slash: the world before it covers it until a diagonal cut sweeps the cover away
+     (a cover, not a clip, for the same reason as the curtain) */
+  .js[data-mode="clean"] [data-anim~="slash"]::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    background: var(--cover);
+    clip-path: polygon(-50% 0, 150% 0, 130% 100%, -50% 100%);
+    pointer-events: none;
+  }
+
+  .js[data-mode="clean"] [data-anim~="slash"].is-in::after {
+    clip-path: polygon(-50% 0, -30% 0, -50% 100%, -50% 100%);
+    animation: slash 1.1s var(--ease-io) backwards;
+  }
+
+  /* The universe grows from a rounded card to the full width */
+  .js[data-mode="clean"] [data-anim~="grow"] {
+    transform-origin: 50% 0;
+    transition:
+      scale 1.3s var(--ease),
+      border-radius 1.3s var(--ease);
+  }
+
+  .js[data-mode="clean"] [data-anim~="grow"]:not(.is-in) {
+    scale: 0.9;
+    border-radius: 3rem;
+  }
+
+  /* The plate rolls in from the side, then its pin and shadow appear */
+  .js[data-mode="clean"] [data-anim~="roll"]:not(.is-in) :is(.plate, .plate-pin),
+  .js[data-mode="clean"] [data-anim~="roll"]:not(.is-in)::before {
+    opacity: 0;
+  }
+
+  .js[data-mode="clean"] [data-anim~="roll"].is-in .plate {
+    animation: roll-in 1.7s var(--ease) backwards;
+  }
+
+  .js[data-mode="clean"] [data-anim~="roll"].is-in .plate-pin {
+    animation: pop 0.4s var(--ease) 1.2s backwards;
+  }
+
+  .js[data-mode="clean"] [data-anim~="roll"].is-in::before {
+    animation: pop 0.6s var(--ease) 1s backwards;
+  }
+}
+
+/* What a screen reader reads where the letters are split up */
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
@@ -3393,7 +4263,6 @@ h3 {
 
   /* Without the timer the slider stays put, so pausing means nothing;
      the power-up doesn't pin or charge, so its meter would mean nothing */
-  .timer,
   .pause,
   .power,
   .petals {
@@ -3402,8 +4271,139 @@ h3 {
 }
 
 /* ==========================================================================
+   Clean's cursor (main.js adds it for a mouse): a red dot on the pointer and
+   a ring trailing it, which swells over anything clickable and names what a
+   drag does there. The system cursor hides, except over text fields.
+   ========================================================================== */
+
+.cursor-dot,
+.cursor-ring {
+  display: none;
+}
+
+[data-mode="clean"].has-cursor,
+[data-mode="clean"].has-cursor * {
+  cursor: none !important;
+}
+
+[data-mode="clean"].has-cursor :is(input, textarea) {
+  cursor: text !important;
+}
+
+[data-mode="clean"].has-cursor :is(.cursor-dot, .cursor-ring) {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+
+[data-mode="clean"].cursor-out :is(.cursor-dot, .cursor-ring) {
+  opacity: 0;
+}
+
+.cursor-dot {
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  background: var(--crimson);
+}
+
+.cursor-ring {
+  width: 40px;
+  height: 40px;
+  margin: -20px 0 0 -20px;
+  border: 1.5px solid rgb(208 2 27 / 0.55);
+  color: #fff;
+  font: 800 5px / 1 var(--body);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transition:
+    opacity 0.3s,
+    scale 0.35s var(--ease),
+    background-color 0.35s var(--ease),
+    border-color 0.35s var(--ease);
+}
+
+.cursor-ring.is-over {
+  scale: 1.5;
+  background: rgb(208 2 27 / 0.12);
+}
+
+/* A drag target: a solid red disc with the word, drawn at twice the size so the 5px label reads as 10px */
+.cursor-ring:not([data-label=""]) {
+  scale: 2;
+  border-color: transparent;
+  background: var(--crimson);
+}
+
+.cursor-ring::after {
+  content: attr(data-label);
+}
+
+/* ==========================================================================
    Keyframes
    ========================================================================== */
+
+@keyframes slide-push {
+  from {
+    translate: 100% 0;
+  }
+}
+
+@keyframes slide-edge {
+  0%,
+  75% {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-sink {
+  to {
+    translate: -30% 0;
+  }
+}
+
+@keyframes slide-dim {
+  to {
+    opacity: 0.6;
+  }
+}
+
+@keyframes photo-push {
+  from {
+    translate: -40% 0;
+  }
+}
+
+@keyframes photo-settle {
+  from {
+    scale: 1.12;
+  }
+}
+
+@keyframes letter-up {
+  from {
+    translate: 0 115%;
+    rotate: 14deg;
+  }
+}
+
+@keyframes eq {
+  from {
+    scale: 1 0.2;
+  }
+}
+
+@keyframes spin {
+  to {
+    rotate: 360deg;
+  }
+}
 
 @keyframes rise {
   from {
@@ -3522,6 +4522,159 @@ h3 {
 @keyframes flash {
   from {
     opacity: 0.9;
+  }
+}
+
+@keyframes won {
+  to {
+    fill: #fff;
+  }
+}
+
+@keyframes kick {
+  45% {
+    rotate: -16deg;
+  }
+}
+
+@keyframes rare {
+  0%,
+  35% {
+    opacity: 0.92;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes enter-left {
+  from {
+    translate: -100% 0;
+  }
+}
+
+@keyframes enter-right {
+  from {
+    translate: 100% 0;
+  }
+}
+
+@keyframes enter-top {
+  from {
+    translate: 0 -100%;
+  }
+}
+
+@keyframes enter-bottom {
+  from {
+    translate: 0 100%;
+  }
+}
+
+@keyframes vs-in {
+  from {
+    opacity: 0;
+    scale: 2.5;
+  }
+}
+
+/* The creatine film: you train (drained), creatine recharges, one more rep (full) */
+@keyframes tank-level {
+  0%,
+  8% {
+    --level: 1;
+  }
+
+  30%,
+  40% {
+    --level: 0.2;
+  }
+
+  60%,
+  70% {
+    --level: 0.6;
+  }
+
+  90%,
+  100% {
+    --level: 1;
+  }
+}
+
+@keyframes tank-step-1 {
+  0%,
+  40% {
+    opacity: 1;
+    translate: none;
+  }
+
+  46%,
+  100% {
+    opacity: 0;
+    translate: 0 -1.5rem;
+  }
+}
+
+@keyframes tank-step-2 {
+  0%,
+  40% {
+    opacity: 0;
+    translate: 0 1.5rem;
+  }
+
+  46%,
+  70% {
+    opacity: 1;
+    translate: none;
+  }
+
+  76%,
+  100% {
+    opacity: 0;
+    translate: 0 -1.5rem;
+  }
+}
+
+@keyframes tank-step-3 {
+  0%,
+  70% {
+    opacity: 0;
+    translate: 0 1.5rem;
+  }
+
+  76%,
+  100% {
+    opacity: 1;
+    translate: none;
+  }
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: perspective(900px) translateY(3.5rem) rotateX(-32deg);
+  }
+}
+
+@keyframes deal {
+  from {
+    opacity: 0;
+    translate: calc((2 - var(--k, 0)) * 100%) 25%;
+    rotate: calc((var(--k, 0) - 2) * -9deg + 4deg);
+    scale: 0.8;
+  }
+}
+
+@keyframes slash {
+  from {
+    clip-path: polygon(-50% 0, 150% 0, 130% 100%, -50% 100%);
+  }
+}
+
+@keyframes roll-in {
+  from {
+    transform: translateX(90vw) rotate(900deg);
   }
 }
 

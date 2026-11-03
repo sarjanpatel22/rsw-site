@@ -19,7 +19,8 @@ function setMode(mode, origin) {
     root.dataset.mode = mode;
     syncToggle();
     orderSections();
-    // Manga always starts at the top, with its intro
+    // Clean's banner plays its entrance for the newcomer; Manga always starts at the top, with its intro
+    if (mode === 'clean') show(current, false);
     if (mode === 'manga') {
       if (lenis) lenis.scrollTo(0, { immediate: true });
       else scrollTo({ top: 0, behavior: 'instant' });
@@ -37,8 +38,16 @@ toggle.addEventListener('click', () => {
   setMode(root.dataset.mode === 'manga' ? 'clean' : 'manga', toggle.getBoundingClientRect());
 });
 
+// Every visit opens on the choice of mode; a reload in the same tab doesn't ask again
 const dialog = document.querySelector('.mode-dialog');
-if (!savedMode()) setTimeout(() => dialog.showModal(), 1200);
+let asked = false;
+try { asked = sessionStorage.getItem('rsw-asked') === '1'; } catch { /* private mode: ask */ }
+if (!asked) {
+  setTimeout(() => {
+    dialog.showModal();
+    dialog.focus(); // not the first side's button, so neither side starts out picked
+  }, 1200);
+}
 dialog.addEventListener('click', (e) => {
   const pick = e.target.closest('[data-pick]');
   if (!pick) return;
@@ -46,8 +55,11 @@ dialog.addEventListener('click', (e) => {
   dialog.close();
   setMode(pick.dataset.pick, origin);
 });
-// Closed with Escape: keep the current mode and don't ask again
-dialog.addEventListener('close', () => { if (!savedMode()) saveMode(root.dataset.mode); });
+// Closed with Escape: keep the current mode
+dialog.addEventListener('close', () => {
+  if (!savedMode()) saveMode(root.dataset.mode);
+  try { sessionStorage.setItem('rsw-asked', '1'); } catch { /* private mode: it asks again next load */ }
+});
 
 // ---------- Phone menu: a popover; close it once a link is picked ----------
 const menu = document.querySelector('#menu');
@@ -282,50 +294,310 @@ chatLog.addEventListener('click', (e) => {
 chat.addEventListener('toggle', (e) => {
   if (e.newState === 'open' && !matchMedia('(pointer: coarse)').matches) chatInput.focus();
 });
-// The launcher keeps out of the way: off the hero (the first impression), Clean's pinned gates and tank
-// (their words can't scroll out from under it) and the footer (it has the contact links)
+// The launcher keeps out of the way: off the hero (the first impression) and the footer (it has the
+// contact links). They count until only the top 30% shows them: after the Shop link, the hero's last
+// strip sits under the bar.
 const chatToggle = document.querySelector('.chat-toggle');
 const inView = new Set();
-function inTheWay(entries) {
+const inTheWay = new IntersectionObserver((entries) => {
   entries.forEach((e) => {
     if (e.isIntersecting) inView.add(e.target);
     else inView.delete(e.target);
   });
-  const blocked = [...inView].some((el) => !el.matches('.gates, .tank') || getComputedStyle(el.firstElementChild).position === 'sticky');
-  chatToggle.classList.toggle('is-shown', !blocked);
-}
-// The hero and footer count until only the top 30% shows them: after the Shop link, the hero's last strip
-// sits under the bar
-const showing = new IntersectionObserver(inTheWay, { rootMargin: '-30% 0px 0px' });
-document.querySelectorAll('.hero, .footer').forEach((el) => showing.observe(el));
-// A scene counts from when it reaches the top of the screen, where its stage sticks, not while it scrolls in
-const pinned = new IntersectionObserver(inTheWay, { rootMargin: '0px 0px -99%' });
-document.querySelectorAll('.gates, .tank').forEach((el) => pinned.observe(el));
+  chatToggle.classList.toggle('is-shown', !inView.size);
+}, { rootMargin: '-30% 0px 0px' });
+document.querySelectorAll('.hero, .footer').forEach((el) => inTheWay.observe(el));
 
-// ---------- Clean hero slider: the CSS timer bar drives the 5s advance ----------
+// ---------- Music: on by default, from the visitor's first click or key (browsers allow sound only after one) ----------
+// Picking a mode in the opening dialog is that first click. The switch mutes it and the choice is kept; it
+// rests while the tab is hidden, and fades in whenever it starts.
+const music = document.querySelector('.music');
+const soundToggle = document.querySelector('.sound-toggle');
+if (music) {
+  let wanted = true;
+  try { wanted = localStorage.getItem('rsw-music') !== 'off'; } catch { /* private mode: on */ }
+  let started = false; // it has played, or the song failed to load: no more starting on a click
+  const loud = 0.6;
+  const play = () => music.play().catch(() => { /* not allowed yet, or no song: stays off */ });
+  const sync = () => soundToggle.setAttribute('aria-pressed', !music.paused);
+  music.addEventListener('play', () => {
+    sync();
+    music.volume = 0;
+    const from = performance.now();
+    requestAnimationFrame(function fade(now) {
+      music.volume = Math.min(loud, Math.max(0, (now - from) / 1500) * loud); // a frame can start before the play
+      if (music.volume < loud && !music.paused) requestAnimationFrame(fade);
+    });
+  });
+  music.addEventListener('pause', sync);
+  music.addEventListener('error', () => {
+    started = true;
+    soundToggle.hidden = true;
+  });
+  soundToggle.hidden = false;
+  const start = (e) => {
+    if (started || !wanted || soundToggle.contains(e.target)) return; // the switch's own click decides for itself
+    music.play().then(() => { started = true; }, () => { /* not allowed yet (Esc doesn't count): the next click */ });
+  };
+  addEventListener('pointerdown', start, true);
+  addEventListener('keydown', start, true);
+  soundToggle.addEventListener('click', () => {
+    started = true;
+    wanted = music.paused;
+    try { localStorage.setItem('rsw-music', wanted ? 'on' : 'off'); } catch { /* private mode: not kept */ }
+    if (wanted) play();
+    else music.pause();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) music.pause();
+    else if (wanted && started && !music.error) play();
+  });
+}
+
+// ---------- Spin the plate: the brief's reward game, with a gym plate for the wheel ----------
+// The reward is picked first, by the brief's odds, then the plate is thrown to land on it. Each spin
+// earns 5 XP, up to 50.
+// shortcut: the odds and the XP live in the browser, so anyone can spin until they like the result; at
+// launch the shop's server should pick the reward and keep the XP per account.
+const spinRoom = document.querySelector('.spin');
+const plateWrap = spinRoom.querySelector('.plate-wrap');
+const plate = plateWrap.querySelector('.plate');
+const pin = plateWrap.querySelector('.plate-pin');
+const spinGo = spinRoom.querySelector('.spin-go');
+const spinResult = spinRoom.querySelector('.spin-result');
+const xpNum = spinRoom.querySelector('.xp b');
+const xpBar = spinRoom.querySelector('.xp-bar');
+
+// [big print, small print, its headline and line when it lands, weight out of 1,000, rare]
+const rewards = [
+  ['30%', 'OFF', 'Rare! 30% off', 'Your first order, 30% off. One spin in 500 lands this.', 2, true],
+  ['COMIC', '3 PAGES', 'Comic pages', 'Three pages of the RSW comic, free, when the Vault opens.', 280],
+  ['₹50', 'OFF', '₹50 off', 'Off your first order.', 220],
+  ['TRY', 'AGAIN', 'So close', 'Better luck on the next spin.', 150],
+  ['FREE', 'SHAKER', 'Rare! Free shaker', 'An RSW shaker with your first order.', 4, true],
+  ['₹100', 'OFF', '₹100 off', 'Off your first order.', 100],
+  ['+10', 'XP', '+10 XP', 'Bonus XP on top of your spin.', 94],
+  ['TRY', 'AGAIN', 'So close', 'Better luck on the next spin.', 150],
+];
+const sliceAngle = 360 / rewards.length;
+
+// The plate, drawn round its middle: a reward on each slice of the rim, then the grips, the embossed
+// lettering and the collar round the hole for the bar
+const draw = (name, attrs, parent) => {
+  const node = document.createElementNS('http://www.w3.org/2000/svg', name);
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+  parent.append(node);
+  return node;
+};
+const at = (r, deg) => `${(r * Math.sin((deg * Math.PI) / 180)).toFixed(2)} ${(-r * Math.cos((deg * Math.PI) / 180)).toFixed(2)}`;
+const slice = (r0, r1, a0, a1) => `M${at(r1, a0)}A${r1} ${r1} 0 0 1 ${at(r1, a1)}L${at(r0, a1)}A${r0} ${r0} 0 0 0 ${at(r0, a0)}Z`;
+draw('circle', { r: 99, class: 'p-iron' }, plate);
+const slices = rewards.map(([big, small, , , , rare], i) => {
+  const g = draw('g', { class: `p-seg${i % 2 ? ' alt' : ''}${rare ? ' rare' : ''}` }, plate);
+  draw('path', { d: slice(64, 95, (i - 0.5) * sliceAngle, (i + 0.5) * sliceAngle) }, g);
+  const label = draw('text', { transform: `rotate(${i * sliceAngle})` }, g);
+  draw('tspan', { x: 0, y: -80 }, label).textContent = big;
+  draw('tspan', { x: 0, y: -70.5, class: 'small' }, label).textContent = small;
+  return g;
+});
+for (const a of [0, 120, 240]) draw('path', { d: slice(38, 54, a - 25, a + 25), class: 'p-grip' }, plate);
+draw('path', { id: 'plate-ring', d: 'M0 -58.5A58.5 58.5 0 1 1 0 58.5A58.5 58.5 0 1 1 0 -58.5', fill: 'none' }, plate);
+draw('textPath', { href: '#plate-ring', textLength: (Math.PI * 117 - 6).toFixed(1), lengthAdjust: 'spacing' },
+  draw('text', { class: 'p-emboss' }, plate)).textContent = 'REAL SAIYAN WELLNESS · 20 KG · TAP INTO YOUR FINAL FORM · 20 KG ·';
+draw('circle', { r: 31, class: 'p-hub' }, plate);
+draw('circle', { r: 21, class: 'p-collar' }, plate);
+draw('circle', { r: 12.5, class: 'p-hole' }, plate);
+
+let turned = 0; // the plate's turn in degrees, clockwise
+let spinning = false;
+let xp = 0;
+try { xp = Math.min(50, Number(localStorage.getItem('rsw-xp')) || 0); } catch { /* private mode: XP starts at 0 */ }
+const showXp = () => {
+  xpNum.textContent = xp;
+  xpBar.style.setProperty('--xp', xp / 50);
+};
+showXp();
+
+// power 0 to 1: a harder throw spins longer
+function throwPlate(direction, power) {
+  if (spinning) return;
+  spinning = true;
+  spinGo.disabled = true;
+  spinResult.textContent = '';
+  slices.forEach((g) => g.classList.remove('is-won'));
+  let roll = Math.random() * 1000;
+  const won = rewards.findIndex((reward) => (roll -= reward[4]) < 0);
+  const rest = -won * sliceAngle + (Math.random() - 0.5) * sliceAngle * 0.6; // under the pin, a little off the slice's middle
+  let turn = (((rest - turned) % 360) + 360) % 360; // clockwise to there
+  if (direction < 0) turn -= 360;
+  turned += turn + direction * 360 * Math.round(3 + 3 * power);
+  const seconds = 3 + 2 * power;
+  plate.style.transition = `rotate ${seconds}s cubic-bezier(0.2, 0.7, 0.15, 1)`;
+  plate.style.rotate = `${turned}deg`;
+  pin.classList.add('is-kicked');
+  setTimeout(() => land(won), reduceMotion ? 0 : seconds * 1000);
+  if (!reduceMotion) requestAnimationFrame(clicks);
+}
+
+// The pin kicks as each slice clicks past it
+let lastSlice = 0;
+function clicks() {
+  if (!spinning) return;
+  const now = Math.floor((parseFloat(getComputedStyle(plate).rotate) || 0) / sliceAngle + 0.5);
+  if (now !== lastSlice) restart([pin]);
+  lastSlice = now;
+  requestAnimationFrame(clicks);
+}
+
+function land(won) {
+  spinning = false;
+  spinGo.disabled = false;
+  pin.classList.remove('is-kicked');
+  const [big, , headline, line, , rare] = rewards[won];
+  xp = Math.min(50, xp + 5 + (big === '+10' ? 10 : 0));
+  try { localStorage.setItem('rsw-xp', xp); } catch { /* private mode: XP won't persist */ }
+  showXp();
+  slices[won].classList.add('is-won');
+  spinResult.innerHTML = `<b>${headline}</b>${line}`;
+  spinRoom.classList.remove('is-rare');
+  if (rare) {
+    void spinRoom.offsetWidth; // replay the flash
+    spinRoom.classList.add('is-rare');
+  }
+}
+
+spinGo.addEventListener('click', () => throwPlate(1, 0.6));
+
+// Grab and throw: the plate follows a sideways drag (above its middle, right turns it clockwise), and a
+// quick one throws it that way. A tap spins it too.
+let grab = null;
+plateWrap.addEventListener('pointerdown', (e) => {
+  if (spinning || e.button) return;
+  const box = plateWrap.getBoundingClientRect();
+  grab = { id: e.pointerId, x: e.clientX, from: turned, at: e.timeStamp, speed: 0, moved: false,
+    side: e.clientY < box.top + box.height / 2 ? 1 : -1 };
+});
+plateWrap.addEventListener('pointermove', (e) => {
+  if (e.pointerId !== grab?.id) return;
+  const dx = e.clientX - grab.x;
+  if (!grab.moved) {
+    if (Math.abs(dx) < 6) return; // still a tap
+    grab.moved = true;
+    plateWrap.setPointerCapture(e.pointerId);
+    plate.style.transition = 'none';
+  }
+  const now = grab.from + dx * 0.4 * grab.side;
+  const dt = e.timeStamp - grab.at;
+  if (dt > 0) grab.speed += ((now - turned) / dt - grab.speed) * 0.6; // degrees a millisecond, smoothed
+  grab.at = e.timeStamp;
+  turned = now;
+  plate.style.rotate = `${turned}deg`;
+});
+plateWrap.addEventListener('pointerup', (e) => {
+  if (e.pointerId !== grab?.id) return;
+  const { moved, speed, at } = grab;
+  grab = null;
+  if (!moved) throwPlate(1, 0.5);
+  else if (Math.abs(speed) > 0.15 && e.timeStamp - at < 80) throwPlate(Math.sign(speed), Math.min(1, Math.abs(speed) / 1.5));
+});
+plateWrap.addEventListener('pointercancel', (e) => {
+  if (e.pointerId === grab?.id) grab = null; // a vertical swipe: the page scrolls instead
+});
+
+// ---------- Clean hero slider: the active control's bar fills over 5 s and moves it on ----------
 const slider = document.querySelector('.slider');
 const slides = [...slider.querySelectorAll('.slide')];
 const dots = [...slider.querySelectorAll('.dot')];
 const pause = slider.querySelector('.pause');
-const bar = slider.querySelector('.timer span');
 let current = 0;
 
-function show(i) {
+// Scene i comes on. With push it pushes in over the one on show (styles.css); without, the scene on show
+// plays its entrance again. Its bar starts filling.
+function show(i, push = true) {
+  const last = current;
   current = (i + slides.length) % slides.length;
-  slides.forEach((s, n) => { s.classList.toggle('is-active', n === current); s.inert = n !== current; });
-  dots.forEach((d, n) => d.setAttribute('aria-current', n === current));
-  bar.style.animation = 'none';
-  void bar.offsetWidth; // restart the timer animation
-  bar.style.animation = '';
+  slider.classList.toggle('has-moved', push && last !== current);
+  slides.forEach((s, n) => {
+    s.classList.remove('is-active');
+    s.classList.toggle('was-active', push && n === last && last !== current);
+    s.inert = n !== current;
+  });
+  dots.forEach((d) => d.setAttribute('aria-current', false));
+  void slider.offsetWidth; // so the entrance and the bar start over
+  slides[current].classList.add('is-active');
+  dots[current].setAttribute('aria-current', true);
 }
 
-show(0);
-bar.addEventListener('animationend', () => show(current + 1));
+show(0, false);
+slider.addEventListener('animationend', (e) => {
+  if (e.target === dots[current].lastElementChild) show(current + 1);
+});
 dots.forEach((d, n) => d.addEventListener('click', () => show(n)));
 pause.addEventListener('click', () => {
   const paused = slider.classList.toggle('is-paused');
   pause.textContent = paused ? '▶' : '❚❚';
   pause.setAttribute('aria-label', paused ? 'Play slideshow' : 'Pause slideshow');
+});
+// Scrolled away it waits, so you come back to the scene you left
+new IntersectionObserver(([e]) => slider.classList.toggle('is-away', !e.isIntersecting)).observe(slider);
+
+// ---------- Clean's cursor: a red dot on the pointer and a ring that trails it ----------
+// The ring swells over anything clickable and names what a drag does there (data-cursor). Mouse only,
+// and only when motion is welcome; styles.css hands the system cursor back in Manga and over text fields.
+if (matchMedia('(hover: hover) and (pointer: fine)').matches && !reduceMotion) {
+  const [dot, ring] = ['cursor-dot', 'cursor-ring'].map((className) => {
+    const el = Object.assign(document.createElement('i'), { className });
+    el.setAttribute('aria-hidden', 'true');
+    return el;
+  });
+  ring.dataset.label = '';
+  document.body.append(dot, ring);
+  root.classList.add('has-cursor');
+  let x = 0, y = 0, rx = 0, ry = 0, trailing = false;
+  const trail = () => {
+    rx += (x - rx) * 0.22;
+    ry += (y - ry) * 0.22;
+    ring.style.translate = `${rx}px ${ry}px`;
+    trailing = Math.abs(x - rx) + Math.abs(y - ry) > 0.2;
+    if (trailing) requestAnimationFrame(trail);
+  };
+  addEventListener('pointermove', (e) => {
+    if (e.pointerType !== 'mouse') return;
+    x = e.clientX;
+    y = e.clientY;
+    dot.style.translate = `${x}px ${y}px`;
+    const over = e.target.closest?.('[data-cursor], a, button, label, summary, select');
+    ring.dataset.label = over?.dataset.cursor || '';
+    ring.classList.toggle('is-over', Boolean(over));
+    root.classList.remove('cursor-out');
+    if (!trailing) {
+      trailing = true;
+      requestAnimationFrame(trail);
+    }
+  }, { passive: true });
+  document.addEventListener('pointerout', (e) => {
+    if (!e.relatedTarget) root.classList.add('cursor-out'); // left the window
+  });
+}
+
+// ---------- Clean's shop: drag a carton round with the mouse; it swings back when let go ----------
+document.querySelectorAll('.products .stage').forEach((stage) => {
+  const product = stage.querySelector('.product');
+  stage.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'mouse' || root.dataset.mode !== 'clean') return;
+    e.preventDefault(); // no text selection
+    const from = e.clientX;
+    const start = parseFloat(getComputedStyle(product).getPropertyValue('--spin'));
+    const turn = (m) => product.style.setProperty('--spin', `${start + (m.clientX - from) * 0.6}deg`);
+    stage.setPointerCapture(e.pointerId);
+    product.classList.add('is-turning');
+    stage.addEventListener('pointermove', turn);
+    stage.addEventListener('lostpointercapture', () => {
+      stage.removeEventListener('pointermove', turn);
+      product.classList.remove('is-turning');
+      product.style.removeProperty('--spin');
+    }, { once: true });
+  });
 });
 
 // ---------- Manga power-up hero: --power climbs 0 → 1 while the pinned hero scrolls ----------
@@ -377,25 +649,11 @@ function orderSections() {
 }
 orderSections();
 
-// ---------- Clean universe gates: tabbing to a world's link scrolls to where its gate is open ----------
-const gates = document.querySelector('.gates');
-const gateList = [...gates.querySelectorAll('.gate')];
-const tank = document.querySelector('.tank');
-gates.addEventListener('focusin', (e) => {
-  if (getComputedStyle(gates.firstElementChild).position !== 'sticky') return; // stacked: no motion, or too short a screen
-  const i = gateList.indexOf(e.target.closest('.gate')) - 1; // the first is the hub, not a world; it shows from the start
-  const box = gates.getBoundingClientRect();
-  const y = scrollY + box.top + (Math.max(0, i + 0.85) / 4) * (box.height - innerHeight);
-  if (lenis) lenis.scrollTo(y, { immediate: true });
-  else scrollTo({ top: y, behavior: 'instant' });
-});
-
 // ---------- The orbit: the Lab, the Warriors and the Vault circle the RSW logo ----------
 // Every frame places the planets on a tilted circle seen in perspective, so the nearest is the
 // biggest and passes in front of the logo. They drift round, wait under the mouse, spin when dragged
-// or swiped sideways, and one tabbed to comes to the front. They fly out from behind the logo as the
-// orbit scrolls in (its --p, from data-scroll). In Clean, as the gates begin, the Lab comes to the
-// front and its world opens out of it: styles.css draws that from the --lx, --ly and --lr set here.
+// or swiped sideways, and one tabbed to comes to the front. They fly out from behind the logo the first
+// time the orbit is well in view.
 const third = (Math.PI * 2) / 3;
 const near = 3; // the eye is 3 orbit radii from the logo
 const drift = (Math.PI * 2) / 36; // one lap in 36 s
@@ -405,7 +663,6 @@ document.querySelectorAll('.orbit').forEach((orbit) => {
   const sun = orbit.querySelector('.sun');
   const [farRing, nearRing] = orbit.querySelectorAll('.ring');
   const planets = [...orbit.querySelectorAll('.planet')];
-  const stage = gates.contains(orbit) && gates.firstElementChild; // Clean's orbit sits on the gates' stage
   for (let z = 1; z <= 12; z++) { // the logo's depth: copies of its letters stacked behind it
     const layer = sun.firstElementChild.cloneNode(true);
     layer.style.setProperty('--z', z);
@@ -414,7 +671,7 @@ document.querySelectorAll('.orbit').forEach((orbit) => {
 
   let angle = 2; // the Lab at the front left, the Warriors far left, the Vault at the right
   let speed = 0;
-  let cosT, sinT, cosR, sinR, radius, pr, cx, cy, ox, oy;
+  let cosT, sinT, cosR, sinR, radius, pr, cx, cy;
 
   // Where a planet at angle a sits, per unit of radius, and how much bigger nearness makes it
   function project(a) {
@@ -474,14 +731,6 @@ document.querySelectorAll('.orbit').forEach((orbit) => {
     sun.style.scale = fits < 1 ? fits.toFixed(3) : '';
     sun.style.translate = `${cx - sw}px ${cy - sh}px`;
     orbit.style.perspectiveOrigin = `${cx}px ${cy}px`;
-
-    if (stage) { // the orbit's place on the stage, for the Lab's disc
-      ox = oy = 0;
-      for (let el = orbit; el && el !== stage; el = el.offsetParent) {
-        ox += el.offsetLeft;
-        oy += el.offsetTop;
-      }
-    }
   }
 
   let hovered = false;
@@ -501,14 +750,11 @@ document.querySelectorAll('.orbit').forEach((orbit) => {
     const dt = last ? Math.min((now - last) / 1000, 0.05) : 0;
     last = now;
     if (radius === undefined) return; // not measured yet
-    const s = stage ? parseFloat(gates.style.getPropertyValue('--s')) || 0 : 0;
-    if (s > 0.2) return; // the Lab's world covers the hub
 
-    const aim = s > 0 ? 0 : focused; // the Lab as its world opens, or a planet tabbed to
     if (drag?.moved) {
       // the pointer turns it
-    } else if (aim >= 0) {
-      const off = Math.PI / 2 - aim * third - angle; // a quarter turn round is the front
+    } else if (focused >= 0) {
+      const off = Math.PI / 2 - focused * third - angle; // a quarter turn round is the front
       const turn = off - Math.round(off / (Math.PI * 2)) * Math.PI * 2; // the short way round
       angle += reduceMotion ? turn : turn * (1 - Math.exp(-dt * 6));
       speed = 0;
@@ -517,9 +763,8 @@ document.querySelectorAll('.orbit').forEach((orbit) => {
       angle += speed * dt;
     }
 
-    // They fly out from behind the logo as the orbit scrolls in
-    const p = parseFloat(orbit.style.getPropertyValue('--p'));
-    const out = reduceMotion || isNaN(p) ? 1 : smooth(clamp01((p - 0.3) / 0.7));
+    // They fly out from behind the logo once it's well in view
+    const out = reduceMotion ? 1 : flyFrom ? smooth(clamp01((now - flyFrom) / 1400)) : 0;
     planets.forEach((planet, k) => {
       const a = angle + k * third;
       const [x, y, scale] = project(a);
@@ -528,13 +773,6 @@ document.querySelectorAll('.orbit').forEach((orbit) => {
       planet.style.zIndex = Math.sin(a) > 0 && out > 0.6 ? 4 : 1;
     });
     for (const ring of [farRing, nearRing]) ring.style.scale = out.toFixed(3);
-
-    if (s > 0) {
-      const [x, y, scale] = project(angle);
-      stage.style.setProperty('--lx', `${(ox + cx + x * radius).toFixed(1)}px`);
-      stage.style.setProperty('--ly', `${(oy + cy + y * radius).toFixed(1)}px`);
-      stage.style.setProperty('--lr', `${(pr * scale).toFixed(1)}px`);
-    }
   }
 
   // Drag or swipe sideways to spin it; let go mid-swipe and it keeps spinning, slowing to its drift
@@ -592,13 +830,15 @@ document.querySelectorAll('.orbit').forEach((orbit) => {
   const resized = new ResizeObserver(fit);
   resized.observe(orbit);
   resized.observe(sun); // its letters change size once the font arrives
+  let flyFrom = 0;
   new IntersectionObserver(([entry]) => {
     visible = entry.isIntersecting;
+    if (entry.intersectionRatio >= 0.4) flyFrom ||= performance.now();
     if (!visible || running) return;
     running = true;
     last = 0;
     requestAnimationFrame(frame);
-  }).observe(orbit);
+  }, { threshold: [0, 0.4] }).observe(orbit);
 });
 
 // ---------- Scroll reveals ----------
@@ -612,35 +852,79 @@ const io = new IntersectionObserver((entries) => {
 }, { threshold: 0.15 });
 document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
 
+// ---------- Clean's entrances: each plays once, the first time it scrolls into view ----------
+// data-anim names the effect and styles.css draws it. Titles split into letters here first (a hidden copy
+// keeps the words whole for screen readers), and labels decode from scrambled letters.
+const graphemes = window.Intl?.Segmenter ? new Intl.Segmenter() : null; // keeps a letter and its accents together
+const lettersOf = (text) => (graphemes ? [...graphemes.segment(text)].map((g) => g.segment) : [...text]);
+
+function splitLetters(el) {
+  let n = 0;
+  (function walk(node) {
+    for (const child of [...node.childNodes]) {
+      if (child.nodeType === Node.ELEMENT_NODE) walk(child);
+      if (child.nodeType !== Node.TEXT_NODE || !child.textContent.trim()) continue;
+      const shown = document.createElement('span');
+      shown.setAttribute('aria-hidden', 'true');
+      for (const part of child.textContent.split(/(\s+)/)) {
+        if (!part.trim()) {
+          shown.append(part);
+          continue;
+        }
+        const word = Object.assign(document.createElement('span'), { className: 'w' });
+        for (const letter of lettersOf(part)) {
+          const c = Object.assign(document.createElement('span'), { className: 'c', textContent: letter });
+          c.style.setProperty('--i', n++);
+          word.append(c);
+        }
+        shown.append(word);
+      }
+      child.replaceWith(Object.assign(document.createElement('span'), { className: 'sr', textContent: child.textContent }), shown);
+    }
+  })(el);
+}
+
+const glyphs = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#%&*+=?';
+function scramble(el) {
+  const texts = [];
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) if (walker.currentNode.textContent.trim()) texts.push([walker.currentNode, walker.currentNode.textContent]);
+  const start = performance.now();
+  requestAnimationFrame(function tick(now) {
+    const t = Math.min(1, (now - start) / 750);
+    for (const [node, text] of texts) {
+      const settled = Math.floor(t * text.length);
+      node.textContent = text.slice(0, settled) + [...text.slice(settled)]
+        .map((ch) => (ch.trim() ? glyphs[Math.floor(Math.random() * glyphs.length)] : ch)).join('');
+    }
+    if (t < 1) requestAnimationFrame(tick);
+  });
+}
+
+const entrances = new IntersectionObserver((entries) => {
+  for (const { isIntersecting, target } of entries) {
+    if (!isIntersecting) continue;
+    entrances.unobserve(target);
+    target.classList.add('is-in');
+    if (target.matches('[data-anim~="scramble"]') && root.dataset.mode === 'clean' && !reduceMotion) scramble(target);
+  }
+}, { rootMargin: '0px 0px -12% 0px' });
+document.querySelectorAll('[data-anim~="letters"], .slider .display').forEach(splitLetters);
+// A group's members go one after another (--k)
+document.querySelectorAll('[data-anim~="cards"], [data-anim~="deal"]').forEach((group) => {
+  [...group.children].forEach((el, k) => el.style.setProperty('--k', k));
+});
+document.querySelectorAll('[data-anim]').forEach((el) => entrances.observe(el));
+
 // ---------- Scroll-linked effects (skipped when motion is unwelcome) ----------
-// [data-scroll] elements get --p from 0 to 1 while their top travels from the bottom of
-// the screen to a quarter from the top. In Clean the slider's boxes turn as the hero scrolls
-// away, and the creatine tank and the universe gates play (--s) through their stages' holds; in
-// Manga the hero pins and charges up as you scroll its tall track.
-const scrollers = [...document.querySelectorAll('[data-scroll]')];
+// Only Manga's hero follows the scroll: it pins and charges up as you scroll its tall track. Clean's
+// effects each play once (data-anim, above), so scrolling Clean costs no work at all.
 const clamp01 = (n) => Math.min(1, Math.max(0, n));
 
 function onScroll() {
-  // Read every position first, then write, so the browser only lays out once
+  if (root.dataset.mode !== 'manga') return;
   const vh = innerHeight;
-  const manga = root.dataset.mode === 'manga';
-  const tops = scrollers.map((el) => el.getBoundingClientRect().top);
   const pin = hero.getBoundingClientRect();
-  const out = manga ? 0 : clamp01(scrollY / slider.offsetHeight);
-  const held = manga ? null : gates.getBoundingClientRect();
-  const tankBox = manga ? null : tank.getBoundingClientRect();
-
-  scrollers.forEach((el, i) => el.style.setProperty('--p', clamp01((vh - tops[i]) / (vh * 0.75)).toFixed(3)));
-
-  if (!manga) {
-    slider.style.setProperty('--out', out.toFixed(3));
-    gates.style.setProperty('--s', clamp01(-held.top / (held.height - vh)).toFixed(4));
-    const drained = clamp01(-tankBox.top / (tankBox.height - vh));
-    tank.style.setProperty('--s', drained.toFixed(4));
-    const step = String(Math.min(3, Math.floor(drained * 3) + 1));
-    if (tank.dataset.step !== step) tank.dataset.step = step;
-    return;
-  }
 
   // Away below the hero for over 10 s, then back: it comes back fresh. It shows uncharged while
   // its stage slides in, and once the stage fills the screen it rewinds to the top, unseen.
@@ -676,8 +960,10 @@ function onScroll() {
 
 let lenis = null;
 if (!reduceMotion) {
-  if (window.Lenis) {
-    // Lenis eases wheel scrolling and anchor jumps, and reports every scroll, keys and scrollbar included
+  // Lenis eases wheel scrolling and anchor jumps, and reports every scroll, keys and scrollbar included.
+  // Touch screens scroll natively: Lenis would leave touch alone anyway, but its blocking touch listeners
+  // make every swipe wait for the page's work
+  if (window.Lenis && !matchMedia('(pointer: coarse)').matches) {
     lenis = new Lenis({ autoRaf: true, anchors: true });
     lenis.on('scroll', onScroll);
   } else {
