@@ -3466,6 +3466,11 @@ body:has(.sound-toggle:not([hidden])) .hero-controls {
   left: max(var(--bx), 4.75rem);
 }
 
+/* Manga's footer ends in words (Clean's ends in the RSW mark), so its last line stops above the switch */
+[data-mode="manga"] body:has(.sound-toggle:not([hidden])) .footer {
+  padding-bottom: 5.5rem;
+}
+
 .sound-toggle:hover {
   translate: 0 -3px;
 }
