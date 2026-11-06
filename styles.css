@@ -703,16 +703,26 @@ h3 {
   font-weight: 800;
 }
 
-/* A photo scene: the picture fills it and fades into the dark behind the words */
+/* A photo scene: the picture fills it and fades into the dark behind the words. --focus-wide and
+   --focus-tall (for the upright crop) mark where the person is: the crop keeps that point in view and the
+   settling zoom pulls back towards it. */
 .slide-photo {
+  --focus: var(--focus-wide, 50% 50%);
   position: absolute;
   inset: 0;
   z-index: -1;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: var(--focus, 50% 50%);
+  object-position: var(--focus);
+  transform-origin: var(--focus);
   mask-image: linear-gradient(to top, transparent, #000 65%);
+}
+
+@media (orientation: portrait) {
+  .slide-photo {
+    --focus: var(--focus-tall, 50% 50%);
+  }
 }
 
 .slide:has(.slide-photo) {
@@ -724,12 +734,6 @@ h3 {
   position: absolute;
   inset: 0;
   z-index: -1;
-}
-
-@media (orientation: portrait) {
-  .slide-photo {
-    object-position: 50% 20%;
-  }
 }
 
 /* The range on a red glow. Under 900px the boxes follow the words. */
@@ -785,6 +789,16 @@ h3 {
 /* Clean lights the cartons from behind in red */
 [data-mode="clean"] .showcase::before {
   background: radial-gradient(closest-side, rgb(208 2 27 / 0.5), transparent);
+}
+
+/* Under 900px the range's boxes stack under its words, so its scene can be taller than the screen. The
+   photo scenes keep to the screen instead of stretching with it, so their words stay on screen and clear
+   of the music switch at the bottom. */
+@media (max-width: 56.24rem) {
+  .slide:has(.slide-photo) {
+    align-self: start;
+    min-height: calc(100svh - 4.75rem - var(--promo));
+  }
 }
 
 /* The boxes spin in one after another whenever their scene appears */

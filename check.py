@@ -441,6 +441,39 @@ try:
         assert not broken, f"{label}: photos failed to load: {broken}"
 
     photos_load("Clean")
+
+    # The hero's photo scenes: at every size the person (the --focus point) is on screen, and the zoom
+    # pulls back towards them
+    for w, h in sizes:
+        driver.set_window_size(w, h)
+        for img in driver.find_elements(By.CSS_SELECTOR, ".slide-photo"):
+            focus, origin, fit = js("""const i = arguments[0], s = getComputedStyle(i);
+                return [s.getPropertyValue('--focus').trim(), s.transformOrigin, s.objectPosition]""", img)
+            assert focus and fit == focus, f"{w}x{h}: the crop should keep the person in view, focus {focus!r}, crop {fit!r}"
+            x, y = (float(v[:-1]) / 100 for v in focus.split())
+            box = js("const r = arguments[0].getBoundingClientRect(); return [r.width, r.height]", img)
+            ox, oy = (float(v[:-2]) for v in origin.split()[:2])
+            assert abs(ox - x * box[0]) < 2 and abs(oy - y * box[1]) < 2, f"{w}x{h}: the zoom should pull back towards the person, {origin} vs {focus}"
+
+    # Under 900px the photo scenes keep to the screen, so their words stay clear of the music switch at the
+    # bottom (the range's taller scene used to stretch them down under it)
+    jump(0)
+    for w, h in sizes:
+        if w >= 900:
+            continue
+        driver.set_window_size(w, h)
+        for n in (1, 2):
+            js(f"document.querySelectorAll('.hero-controls .dot')[{n}].click()")
+            js("document.querySelector('.slide.is-active').getAnimations({subtree: true}).forEach((a) => a.effect.getComputedTiming().endTime < Infinity && a.finish())")
+            under = js("""const t = document.querySelector('.sound-toggle');
+                if (!t.checkVisibility()) return false;
+                const s = t.getBoundingClientRect();
+                return [...document.querySelectorAll('.slide.is-active .slide-copy > *')].some((e) => {
+                    const r = e.getBoundingClientRect();
+                    return r.right > s.left && r.left < s.right && r.bottom > s.top && r.top < s.bottom;
+                })""")
+            assert not under, f"{w}x{h}: slide {n + 1}'s words run under the music switch"
+    driver.set_window_size(1440, 900)
     greyed = js("return [...document.querySelectorAll('img')].filter((img) => img.checkVisibility() && getComputedStyle(img).filter !== 'none').map((img) => img.getAttribute('src'))")
     assert not greyed, f"Clean shows its photos in full colour, but these are filtered: {greyed}"
 
