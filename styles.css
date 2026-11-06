@@ -71,8 +71,8 @@
 
 /* Clean is black and white, in a full range of greys rather than two flat tones, with one RSW red: the
    brand's colours turn to ink, silver and paper there (Manga keeps its own), and crimson becomes a bold
-   red, so everything built from them follows: buttons, fields, cartons and planets. Photos get a toning
-   curve (#clean-tone in index.html): deep blacks, bright highlights. */
+   red, so everything built from them follows: buttons, fields, cartons and planets. Photos stay in full
+   colour. */
 [data-mode="clean"] {
   --coal: #0c0c0d; /* ink */
   --crimson: #d0021b; /* RSW red */
@@ -88,10 +88,6 @@
   --shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 14px 40px rgb(0 0 0 / 0.1);
 }
 
-[data-mode="clean"] img {
-  filter: url("#clean-tone");
-}
-
 /* A fine film grain over all of Clean; it stays put, so scrolling never redraws it */
 [data-mode="clean"] body::after {
   content: "";
@@ -101,14 +97,6 @@
   background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.55 0'/></filter><rect width='200' height='200' filter='url(%23g)'/></svg>") 0 0 / 200px 200px;
   opacity: 0.18;
   pointer-events: none;
-}
-
-/* The filter's own svg takes no room (display: none would switch the filter off in some browsers) */
-.tones {
-  position: absolute;
-  width: 0;
-  height: 0;
-  overflow: hidden;
 }
 
 /* ==========================================================================
@@ -210,15 +198,20 @@ a {
   display: none;
 }
 
-/* Clean: the shop and the Warriors first; the marquee, story and universe after them (main.js moves
-   the sections to match, for Tab and screen-reader order) */
+/* Clean: the shop, the Warriors, the photo strip and the universe first; then the story, the facts
+   label, how creatine works and the rewards (main.js moves the sections to match, for Tab and
+   screen-reader order) */
 [data-mode="clean"] main {
   display: flex;
   flex-direction: column;
 }
 
-[data-mode="clean"] :is(.marquee, #story, #universe, .soon, .spin) {
+[data-mode="clean"] #universe {
   order: 1;
+}
+
+[data-mode="clean"] :is(#story, .soon, .spin, .strip-facts, .creatine) {
+  order: 2;
 }
 
 /* ==========================================================================
@@ -412,7 +405,7 @@ h3 {
 
 /* The bar's logo and buttons shrink on phones narrower than 390px, so the whole bar always fits */
 .logo {
-  padding-block: 0.2rem; /* a tap target at least 24px tall, like the footer's and the gates' links */
+  padding-block: 0.2rem; /* a tap target at least 24px tall, like the footer's links */
   color: var(--accent-text);
   font-size: clamp(1.2rem, 6.15vw, 1.5rem);
   text-decoration: none;
@@ -710,8 +703,7 @@ h3 {
   font-weight: 800;
 }
 
-/* A photo scene: the picture fills it and fades into the dark behind the words. Toned already, so the
-   page's photo filter is off. */
+/* A photo scene: the picture fills it and fades into the dark behind the words */
 .slide-photo {
   position: absolute;
   inset: 0;
@@ -721,10 +713,6 @@ h3 {
   object-fit: cover;
   object-position: var(--focus, 50% 50%);
   mask-image: linear-gradient(to top, transparent, #000 65%);
-}
-
-[data-mode="clean"] .slide-photo {
-  filter: none;
 }
 
 .slide:has(.slide-photo) {
@@ -1270,36 +1258,84 @@ h3 {
   animation: marquee 30s linear infinite;
 }
 
-/* Clean: the black tape runs right under the red one running left, both a little wider than the screen
-   so their tilted ends never show */
-[data-mode="clean"] .marquee {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr); /* the screen's width, not the long text's */
-  padding-block: clamp(2.5rem, 5vw, 4.5rem);
-  overflow: clip;
+/* Clean's photo strip: giant words, a Warriors photo between each two; it stops under the mouse */
+.strip-photo {
+  padding-block: clamp(1.25rem, 3vw, 2.5rem);
   background: none;
-  font-size: clamp(1.4rem, 3.6vw, 3.25rem);
+  color: var(--coal);
+  font-size: clamp(2.75rem, 9vw, 8rem);
 }
 
-.tape {
-  grid-area: 1 / 1;
-  z-index: 1;
-  margin-inline: -5vw;
-  padding-block: 0.35em;
-  overflow: clip;
-  background: var(--crimson);
-  color: #fff;
-  rotate: -2.5deg;
+.strip-photo .marquee-track {
+  animation-duration: 80s;
 }
 
-.tape + .tape {
-  z-index: 0;
-  background: var(--coal);
-  rotate: 2.5deg;
+.strip-photo:hover .marquee-track {
+  animation-play-state: paused;
 }
 
-.tape + .tape .marquee-track {
-  animation-direction: reverse;
+.strip-photo span {
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+  padding-right: 0.3em;
+}
+
+.strip-photo img {
+  flex: none;
+  width: 1.7em;
+  height: 0.82em;
+  border-radius: 999px;
+  object-fit: cover;
+}
+
+/* Clean's facts label: the values set like the supplement facts on the tub, and no excuses */
+.strip-facts {
+  margin-block: clamp(1.5rem, 4vw, 3rem);
+  padding: 0;
+  border-block: 0.45em solid var(--coal);
+  background: #fff;
+  color: var(--coal);
+  font: 800 clamp(0.95rem, 2vw, 1.5rem) / 1 var(--body);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.strip-facts .marquee-track {
+  animation-duration: 60s;
+}
+
+.strip-facts span {
+  display: flex;
+  align-items: stretch;
+}
+
+.strip-facts b {
+  padding: 0.5em 0.75em 0.45em;
+  border-right: 0.3em solid var(--coal);
+  font: 900 1.5em / 1 var(--display);
+  font-stretch: 125%;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+}
+
+.strip-facts em {
+  display: flex;
+  align-items: center;
+  gap: 1.4em;
+  padding: 0 1em;
+  border-right: 1px solid var(--coal);
+  font-style: normal;
+}
+
+.strip-facts i {
+  font-style: normal;
+  font-weight: 400;
+}
+
+.strip-facts .zero i {
+  color: var(--accent-text);
+  font-weight: 800;
 }
 
 [data-mode="manga"] .marquee {
@@ -1637,15 +1673,14 @@ h3 {
 /* ==========================================================================
    Universe: index.html holds both looks (see Modes). Both have the orbit: three
    worlds circling the RSW logo (see "The orbit" below).
-   Clean: a scroll scene. Its first screen, the hub, holds the orbit; then it steps
-   through the four worlds, the Lab opening out of its planet and each one after it
-   out of a gate in the one before, like the gates of old Ahmedabad.
+   Clean: the orbit fills a screen of stars, and a planet tapped opens its world
+   full screen (see "Worlds" below).
    Manga: the orbit fills the chapter, inked like a comic.
    ========================================================================== */
 
 .universe {
   display: grid;
-  grid-template-columns: minmax(0, 1fr); /* stops the world cards widening the page on phones */
+  grid-template-columns: minmax(0, 1fr); /* stops the orbit widening the page on phones */
   justify-items: center;
   text-align: center;
 }
@@ -1654,142 +1689,119 @@ h3 {
   justify-self: center;
 }
 
-/* Clean: the worlds fill it edge to edge; it grows from a rounded card the first time it comes into view
+/* Clean: the sky fills it edge to edge; it grows from a rounded card the first time it comes into view
    (see Clean's entrances) */
 [data-mode="clean"] .universe {
-  overflow: clip; /* rounds the worlds' corners while it is a card */
+  overflow: clip; /* rounds the sky's corners while it is a card */
   padding: 0;
 }
 
-/* Each world is a flat field of its own colour, its words on the left and its picture on the right.
-   Without motion they simply stack */
-.gates {
-  justify-self: stretch;
-  text-align: left;
-}
-
-/* Each world is a screen of its own, lit from the top left and darker towards its edges */
-.gate {
+/* A night sky round the orbit: a red glow behind the logo, darker towards the edges */
+.hub {
   position: relative;
-  display: grid;
-  min-height: 100svh;
-  overflow: clip; /* keeps a photo settling from its zoom inside its world */
-  background:
-    radial-gradient(120% 90% at 25% 15%, rgb(255 255 255 / 0.09), transparent 60%),
-    radial-gradient(140% 110% at 50% 50%, transparent 55%, rgb(0 0 0 / 0.14)),
-    var(--field, var(--crimson));
-  color: var(--on, var(--cream));
-}
-
-/* The hub glows red behind the logo */
-.gate.hub {
+  isolation: isolate; /* the stars stay behind the words */
+  justify-self: stretch;
+  overflow: clip; /* and the shooting stars inside the sky */
   background:
     radial-gradient(55% 50% at 50% 48%, rgb(208 2 27 / 0.4), transparent 70%),
     radial-gradient(140% 110% at 50% 50%, transparent 50%, rgb(0 0 0 / 0.35)),
     var(--coal);
+  color: var(--cream);
+  text-align: left;
 }
 
-.gate-photo {
+/* Stars: three fields of dots, each tiled at its own size so the pattern never visibly repeats. The two
+   brighter fields twinkle out of step (one has a red star), and now and then a star shoots across (the
+   <i>s; see Clean's entrances for the motion). */
+.stars,
+.stars::before,
+.stars::after {
   position: absolute;
-  inset: 0 0 0 auto;
-  width: 40%;
-  height: 100%;
-  object-fit: cover;
-  object-position: 30% 50%;
+  inset: 0;
+  pointer-events: none;
 }
 
-/* The Lab's picture is its range of cartons */
-.gate-cartons {
+.stars {
+  z-index: -1;
+  background:
+    radial-gradient(1px 1px at 12% 18%, rgb(255 255 255 / 0.6) 50%, transparent),
+    radial-gradient(1px 1px at 47% 7%, rgb(255 255 255 / 0.45) 50%, transparent),
+    radial-gradient(1px 1px at 83% 27%, rgb(255 255 255 / 0.55) 50%, transparent),
+    radial-gradient(1px 1px at 29% 52%, rgb(255 255 255 / 0.4) 50%, transparent),
+    radial-gradient(1px 1px at 66% 61%, rgb(255 255 255 / 0.6) 50%, transparent),
+    radial-gradient(1px 1px at 91% 78%, rgb(255 255 255 / 0.45) 50%, transparent),
+    radial-gradient(1px 1px at 18% 86%, rgb(255 255 255 / 0.55) 50%, transparent),
+    radial-gradient(1px 1px at 54% 93%, rgb(255 255 255 / 0.4) 50%, transparent),
+    radial-gradient(1px 1px at 5% 40%, rgb(255 255 255 / 0.5) 50%, transparent),
+    radial-gradient(1px 1px at 74% 44%, rgb(255 255 255 / 0.45) 50%, transparent);
+  background-size: 163px 163px;
+}
+
+.stars::before {
+  content: "";
+  background:
+    radial-gradient(1.5px 1.5px at 22% 33%, #fff 40%, transparent),
+    radial-gradient(1.5px 1.5px at 61% 14%, #fff 40%, transparent),
+    radial-gradient(1.5px 1.5px at 88% 56%, #fff 40%, transparent),
+    radial-gradient(1.5px 1.5px at 39% 72%, #fff 40%, transparent),
+    radial-gradient(1.5px 1.5px at 8% 63%, #fff 40%, transparent),
+    radial-gradient(1.5px 1.5px at 72% 91%, #fff 40%, transparent);
+  background-size: 233px 233px;
+}
+
+.stars::after {
+  content: "";
+  background:
+    radial-gradient(2.5px 2.5px at 35% 25%, #fff 25%, rgb(255 255 255 / 0.25) 55%, transparent),
+    radial-gradient(2.5px 2.5px at 80% 10%, #fff 25%, rgb(255 255 255 / 0.25) 55%, transparent),
+    radial-gradient(2.5px 2.5px at 15% 70%, #fff 25%, rgb(255 255 255 / 0.25) 55%, transparent),
+    radial-gradient(2.5px 2.5px at 57% 48%, var(--flare) 25%, rgb(255 90 106 / 0.3) 55%, transparent),
+    radial-gradient(2.5px 2.5px at 93% 84%, #fff 25%, rgb(255 255 255 / 0.25) 55%, transparent);
+  background-size: 347px 347px;
+}
+
+/* A shooting star: a streak, bright at its head, that waits out of sight until its turn */
+.stars i {
+  position: absolute;
+  top: var(--y);
+  left: var(--x);
+  width: clamp(5rem, 12vw, 10rem);
+  height: 1.5px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, #fff, transparent);
+  transform-origin: 0 50%;
+  opacity: 0;
+}
+
+.stars i:nth-child(1) {
+  --x: 72%;
+  --y: 12%;
+}
+
+.stars i:nth-child(2) {
+  --x: 34%;
+  --y: 6%;
+}
+
+.stars i:nth-child(3) {
+  --x: 94%;
+  --y: 40%;
+}
+
+/* The title, then the orbit, then the words under it, all on one screen */
+.hub-copy {
   display: grid;
-  align-content: center;
-  padding: calc(5rem + var(--promo)) 2rem 2rem 0;
-}
-
-/* --cover: the world before it, which covers it until it cuts in (see Clean's entrances) */
-.gate:nth-child(2) {
-  --field: var(--cream);
-  --on: var(--coal);
-  --cover: var(--coal);
-}
-
-.gate:nth-child(3) {
-  --field: var(--coal);
-  --cover: var(--cream);
-}
-
-.gate:nth-child(4) {
-  --field: #8a8a8f; /* steel */
-  --on: var(--coal);
-  --cover: var(--coal);
-}
-
-.gate:nth-child(5) {
-  --cover: #8a8a8f;
-}
-
-.gate-copy {
-  display: grid;
-  grid-template-columns: minmax(0, 56%);
-  align-content: center;
-  justify-items: start;
-  gap: clamp(0.75rem, 1.6vw, 1.5rem);
-  min-height: 70svh;
-  padding: calc(6rem + var(--promo)) var(--gutter) 4rem;
-}
-
-/* svh: a world's words fit a short laptop screen. The last term keeps the longest word, WARRIORS
-   (about 7.1em), inside its 56% column, clear of the picture. */
-.gate .h1 {
-  font-size: clamp(2.25rem, min(7.5vw, 12svh, (100vw - 2 * var(--gutter)) * 0.0765), 8rem);
-}
-
-.gate p {
-  max-width: 42ch;
-  font-size: clamp(1rem, 1.35vw, 1.4rem);
-}
-
-/* What's inside each world: short plain lines under the paragraph */
-.gate ul {
-  display: grid;
-  gap: 0.35rem;
-  padding: 0;
-  list-style: none;
-  font-weight: 600;
-  font-size: clamp(0.95rem, 1.1vw, 1.15rem);
-}
-
-/* Each world's link; AI Sensei's is a button that opens the chat */
-.gate-copy > :is(a, button) {
-  display: inline-block;
-  padding: 0.3rem 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  font-weight: 800;
-  font-size: 1.1rem;
-  text-decoration: underline;
-  text-underline-offset: 0.25em;
-  cursor: pointer;
-  transition: translate 0.3s var(--ease);
-}
-
-.gate-copy > :is(a, button):hover,
-.gate-copy > :is(a, button):focus-visible {
-  translate: 0.4rem 0;
-}
-
-/* The hub: the title, then the orbit, then the words under it */
-.hub .gate-copy {
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-rows: auto minmax(15rem, 1fr) auto;
   grid-template-areas:
     "title title"
     "orbit orbit"
     "text hint";
-  column-gap: 2rem;
-  min-height: 100svh; /* a whole screen, pinned or not */
-  padding-bottom: clamp(1.5rem, 5svh, 4rem);
+  align-content: center;
+  justify-items: start;
+  gap: clamp(0.75rem, 1.6vw, 1.5rem) 2rem;
+  min-height: 100svh;
+  padding: calc(6rem + var(--promo)) var(--gutter) clamp(1.5rem, 5svh, 4rem);
 }
 
 .hub .h1 {
@@ -1805,6 +1817,8 @@ h3 {
 
 .hub p {
   grid-area: text;
+  max-width: 42ch;
+  font-size: clamp(1rem, 1.35vw, 1.4rem);
 }
 
 .hub .orbit-hint {
@@ -1816,45 +1830,13 @@ h3 {
   text-align: right;
 }
 
+/* Phones: everything in one column */
 @media (max-width: 760px) {
-  /* Phones: the picture fills what the words leave of the screen, under them */
-  .gate {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .gate-photo {
-    position: static;
-    flex: 1 1 0;
-    width: 100%;
-    min-height: 0;
-  }
-
-  .gate-cartons {
-    place-items: center;
-    padding: 0 var(--gutter) 1.5rem;
-  }
-
-  .gate-cartons .showcase {
-    width: auto;
-    height: 100%;
-    max-width: 100%;
-  }
-
-  .gate-copy {
-    grid-template-columns: minmax(0, 1fr);
-    align-content: start;
-  }
-
-  .gate:not(.hub) .gate-copy {
-    min-height: 0;
-    padding-bottom: 1.5rem;
-  }
-
-  .hub .gate-copy {
+  .hub-copy {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(13rem, 1fr) auto auto;
     grid-template-areas: "title" "orbit" "text" "hint";
+    align-content: start;
   }
 
   .hub .orbit-hint {
@@ -1985,23 +1967,35 @@ h3 {
   scale: 1.1;
 }
 
-/* Each planet is its world's colour, as in Clean's gates. The translates hold the logo and the
-   planets in place until main.js takes over. */
-.planet[href="#lab"] {
+/* Each planet is its world's colour, and in Clean the world it opens is too (see "Worlds") */
+.planet[href="#lab"],
+#world-lab {
   --field: var(--cream);
   --on: var(--coal);
+}
+
+.planet[href="#warriors"],
+#world-warriors {
+  --field: var(--coal);
+  --on: var(--cream);
+}
+
+.planet[href="#vault"],
+#world-vault {
+  --field: var(--flare);
+  --on: var(--coal);
+}
+
+/* These hold the logo and the planets in place until main.js takes over */
+.planet[href="#lab"] {
   translate: calc(25cqw - 50%) calc(72cqh - 50%);
 }
 
 .planet[href="#warriors"] {
-  --field: var(--coal);
-  --on: var(--cream);
   translate: calc(32cqw - 50%) calc(24cqh - 50%);
 }
 
 .planet[href="#vault"] {
-  --field: var(--flare);
-  --on: var(--coal);
   translate: calc(80cqw - 50%) calc(38cqh - 50%);
 }
 
@@ -2072,6 +2066,166 @@ h3 {
   font: 400 16cqi / 1 var(--sfx);
   -webkit-text-stroke: 2px var(--coal);
   rotate: 10deg;
+}
+
+/* Worlds (Clean): a planet tapped opens its world full screen, a flat field of the planet's colour lit
+   from the top left and darker towards its edges, its words on the left and its picture on the right.
+   main.js grows it out of the planet as a circle and shrinks it back into it; its words rise in once it's
+   open (see Clean's entrances). */
+.world {
+  inset: 0;
+  width: 100vw; /* under the page's scrollbar too, so nothing moves when it goes (below) */
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden auto; /* a short screen scrolls the world, not the page */
+  overscroll-behavior: contain;
+  background:
+    radial-gradient(120% 90% at 25% 15%, rgb(255 255 255 / 0.09), transparent 60%),
+    radial-gradient(140% 110% at 50% 50%, transparent 55%, rgb(0 0 0 / 0.14)),
+    var(--field);
+  color: var(--on);
+  text-align: left;
+}
+
+.world[open] {
+  display: grid;
+}
+
+/* The universe shows round the circle while it grows */
+.world::backdrop {
+  background: none;
+}
+
+.world:focus {
+  outline: none;
+}
+
+/* While a world fills the screen the page behind stays put. main.js sets this only once the circle covers
+   everything, and lifts it before the circle shrinks: losing the scrollbar re-flows the page a little,
+   out of sight there. */
+html.world-open {
+  overflow: hidden;
+}
+
+.world-copy {
+  display: grid;
+  grid-template-columns: minmax(0, 56%);
+  align-content: center;
+  justify-items: start;
+  gap: clamp(0.75rem, 1.6vw, 1.5rem);
+  padding: clamp(4.5rem, 12svh, 7rem) var(--gutter) 4rem;
+}
+
+/* svh: a world's words fit a short laptop screen. The last term keeps the longest word, WARRIORS
+   (about 7.1em), inside its 56% column, clear of the picture. */
+.world .h1 {
+  font-size: clamp(2.25rem, min(7.5vw, 12svh, (100vw - 2 * var(--gutter)) * 0.0765), 8rem);
+}
+
+.world p {
+  max-width: 42ch;
+  font-size: clamp(1rem, 1.35vw, 1.4rem);
+}
+
+/* What's inside each world: short plain lines under the paragraph */
+.world ul {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0;
+  list-style: none;
+  font-weight: 600;
+  font-size: clamp(0.95rem, 1.1vw, 1.15rem);
+}
+
+/* Each world's link to its part of the page */
+.world-copy > a {
+  display: inline-block;
+  padding: 0.3rem 0;
+  font-weight: 800;
+  font-size: 1.1rem;
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+  transition: translate 0.3s var(--ease);
+}
+
+.world-copy > a:is(:hover, :focus-visible) {
+  translate: 0.4rem 0;
+}
+
+.world-photo {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 40%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 30% 50%;
+}
+
+/* The Lab's picture is its range of cartons */
+.world-cartons {
+  display: grid;
+  align-content: center;
+  padding: 4rem 2rem 2rem 0;
+}
+
+/* Back to the universe: a round × in the top corner */
+.world-close {
+  position: absolute;
+  top: clamp(1rem, 3svh, 1.5rem);
+  right: clamp(1rem, 3vw, 1.5rem);
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  background: var(--field);
+  color: var(--on);
+  font: 400 1.75rem / 1 var(--body);
+  cursor: pointer;
+  transition: rotate 0.4s var(--ease);
+}
+
+.world-close:is(:hover, :focus-visible) {
+  rotate: 90deg;
+}
+
+/* Phones: the picture fills what the words leave of the screen, under them */
+@media (max-width: 760px) {
+  .world[open] {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .world-copy {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    padding-bottom: 1.5rem;
+  }
+
+  .world-photo {
+    position: static;
+    flex: 1 1 0;
+    width: 100%;
+    min-height: 0;
+  }
+
+  .world-cartons {
+    place-items: center;
+    padding: 0 var(--gutter) 1.5rem;
+  }
+
+  .world-cartons .showcase {
+    width: auto;
+    height: 100%;
+    max-width: 100%;
+  }
 }
 
 /* ==========================================================================
@@ -2265,7 +2419,7 @@ h3 {
 /* Creatine: index.html holds both looks (see Modes).
    Clean: a scroll scene where the screen fills and drains (below). Manga: a comic strip (after it). */
 
-/* Clean: a bar beside the words is the muscles' quick energy. The first time it comes into view it plays
+/* Clean: a bar beside the words is the muscles' quick energy. Each time it comes into view it plays
    like a short film (see the scene below): training drains the level to 20%, creatine refills it to
    60%, then 100%. --level is registered so the keyframes can move it; --atp, a registered integer,
    rounds it for the readout. Without motion the three steps simply sit side by side. */
@@ -2281,9 +2435,14 @@ h3 {
   initial-value: 100;
 }
 
+/* Clean's last section: the scene fills the screen edge to edge, straight after Spin the plate */
+.creatine {
+  padding-top: 0;
+}
+
 .tank {
   --atp: calc(var(--level) * 100);
-  margin: clamp(4rem, 8vw, 7rem) calc(-1 * var(--gutter)) 0;
+  margin-inline: calc(-1 * var(--gutter));
 }
 
 .tank-view {
@@ -2310,7 +2469,6 @@ h3 {
 }
 
 .tank-steps .h1 {
-  margin: 0; /* h4s aren't in the base reset */
   font-size: clamp(1.75rem, 3vw, 2.5rem);
 }
 
@@ -2319,8 +2477,8 @@ h3 {
   font-size: clamp(1.1rem, 1.6vw, 1.5rem);
 }
 
-/* The scene: a screen that plays once, the first time it comes into view (main.js adds .is-in). Not on
-   screens too short to hold it (a phone held sideways). */
+/* The scene: a screen that plays each time it comes into view (main.js adds .is-in). Not on screens
+   too short to hold it (a phone held sideways). */
 @media (prefers-reduced-motion: no-preference) and (min-height: 501px) {
   .js .tank-stage {
     --bar: 40%;
@@ -2613,40 +2771,10 @@ h3 {
   grid-column: 1 / -1;
 }
 
-/* Clean: chapter 4 takes Manga's comic look in Clean's colours, a pale panel with an inked title in a red
-   offset shadow, a slanted red tag and a square, hard-shadowed button */
-[data-mode="clean"] .warriors {
-  --pill: 0;
-  background: linear-gradient(180deg, var(--surface), #e4e4e2);
-  color: var(--coal);
-}
-
+/* Clean: a dark room (.room-ink) where the colour photos shine, its label in the light red of the hero's
+   dark slides */
 [data-mode="clean"] .warriors .chapter {
-  padding: 0.4rem 0.75rem;
-  background: var(--accent);
-  color: var(--cream);
-  transform: skew(-10deg);
-}
-
-[data-mode="clean"] .warriors .h1 {
-  text-shadow: 0.06em 0.06em 0 var(--accent);
-  transform: skew(-6deg);
-}
-
-[data-mode="clean"] .warriors .btn {
-  border: 3px solid var(--coal);
-  box-shadow: 5px 5px 0 var(--coal);
-  transform: skew(-8deg);
-}
-
-[data-mode="clean"] .warriors .btn:hover {
-  translate: -2px -2px;
-  box-shadow: 8px 8px 0 var(--coal);
-}
-
-/* Clean: people training, a row of framed photos under the words, in full colour: real people, as they are */
-[data-mode="clean"] .warrior-shots img {
-  filter: none;
+  color: var(--flare);
 }
 
 .warrior-shots {
@@ -2697,8 +2825,7 @@ h3 {
   height: auto;
   aspect-ratio: 4 / 5;
   object-fit: cover;
-  border: 3px solid var(--coal);
-  box-shadow: 5px 5px 0 var(--coal);
+  border-radius: var(--radius);
 }
 
 /* Manga: the photos are inked panels, black-and-white under a screentone of dots, in the room's ink
@@ -2776,7 +2903,7 @@ h3 {
   margin: 0;
 }
 
-/* Clean: each card opens with a photo to its edges. The Vault's is inked like a manga panel, a taste of
+/* Clean: each card opens with a photo to its edges. The Vault's gets a manga panel's dots, a taste of
    the comics to come. */
 .soon-photo {
   position: relative;
@@ -2791,10 +2918,6 @@ h3 {
   object-fit: cover;
   object-position: 58% 40%;
   border-radius: var(--radius) var(--radius) 0 0;
-}
-
-.soon-photo.inked img {
-  filter: contrast(1.35) url("#clean-tone");
 }
 
 .soon-photo.inked::after {
@@ -2878,6 +3001,7 @@ h3 {
   justify-self: center;
   width: min(100%, 34rem);
   aspect-ratio: 1;
+  container-type: inline-size; /* the logo on its hub is sized by it */
   touch-action: pan-y;
   -webkit-user-select: none;
   user-select: none;
@@ -2963,12 +3087,27 @@ h3 {
   stroke: #444447;
 }
 
-.p-collar {
-  fill: #d4d4d6;
-}
-
-.p-hole {
-  fill: #0b0b0c;
+/* The RSW logo on the hub, where the bar would go: it stays upright while the plate spins under it,
+   inside a silver collar */
+.plate-logo {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  width: 26%;
+  height: 26%;
+  margin: auto;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, rgb(255 255 255 / 0.22), transparent 55%), var(--crimson);
+  box-shadow:
+    0 0 0 1.2cqi #d4d4d6,
+    0 0.6cqi 1.6cqi 1.2cqi rgb(0 0 0 / 0.45),
+    inset 0 -0.8cqi 1.6cqi rgb(0 0 0 / 0.35);
+  color: #fff;
+  font: 900 6.6cqi / 1 var(--display);
+  font-stretch: 125%;
+  letter-spacing: -0.02em;
+  pointer-events: none;
 }
 
 /* The pin at the top that the plate's rewards pass under; it kicks as each one clicks past */
@@ -3093,7 +3232,6 @@ h3 {
 
 .mode-dialog {
   --slash: 7vw; /* how far the cut between the sides leans */
-  --split: 50%; /* where it crosses the middle of the screen */
   width: 100%;
   max-width: none;
   height: 100%;
@@ -3150,14 +3288,6 @@ html:has(.mode-dialog[open]) {
   grid-template-columns: 1fr 1fr;
   height: 100%;
   transition: grid-template-columns 0.6s var(--ease);
-}
-
-.mode-dialog:has(.choice-clean:is(:hover, :focus-visible)) {
-  --split: 63%;
-}
-
-.mode-dialog:has(.choice-manga:is(:hover, :focus-visible)) {
-  --split: 37%;
 }
 
 .mode-dialog:has(.choice-clean:is(:hover, :focus-visible)) .choices {
@@ -3223,10 +3353,6 @@ html:has(.mode-dialog[open]) {
     opacity 0.5s var(--ease);
 }
 
-.choice-clean img {
-  filter: url("#clean-tone");
-}
-
 .choice-manga img {
   filter: grayscale(1) contrast(1.4);
   opacity: 0.4;
@@ -3288,40 +3414,13 @@ html:has(.mode-dialog[open]) {
   writing-mode: vertical-rl;
 }
 
-/* VS, on the middle of the cut */
-.versus {
-  position: absolute;
-  top: 50%;
-  left: calc(var(--split) + var(--slash) / 2);
-  z-index: 2;
-  display: grid;
-  place-items: center;
-  width: clamp(4rem, 7vw, 6rem);
-  aspect-ratio: 1;
-  margin: 0;
-  border: 3px solid #efefed;
-  border-radius: 50%;
-  background: #d0021b;
-  color: #fff;
-  font: italic 900 clamp(1.25rem, 2.2vw, 2rem) / 1 var(--display);
-  font-stretch: 125%;
-  translate: -50% -50%;
-  rotate: -8deg;
-  pointer-events: none;
-  transition: left 0.6s var(--ease);
-}
-
-/* It slams in: the sides from either edge, then the VS */
+/* It slams in: the sides from either edge */
 .mode-dialog[open] .choice-clean {
   animation: enter-left 0.8s var(--ease) both;
 }
 
 .mode-dialog[open] .choice-manga {
   animation: enter-right 0.8s var(--ease) both;
-}
-
-.mode-dialog[open] .versus {
-  animation: vs-in 0.5s var(--ease-back) 0.45s both;
 }
 
 /* Upright screens stack the sides, Clean on top, and the cut runs across */
@@ -3356,11 +3455,6 @@ html:has(.mode-dialog[open]) {
   .choice-manga i {
     top: calc(var(--slash) + 1rem);
     font-size: clamp(3rem, 10svh, 6rem);
-  }
-
-  .versus {
-    top: calc(50% + var(--slash) / 2);
-    left: 50%;
   }
 
   .mode-dialog[open] .choice-clean {
@@ -4101,7 +4195,7 @@ body:has(.sound-toggle:not([hidden])) .hero-controls {
   }
 }
 
-/* Clean's entrances: each plays once, the first time its element scrolls into view (data-anim in
+/* Clean's entrances: each plays once (the creatine film each time), when its element scrolls into view (data-anim in
    index.html; main.js splits the letters and adds .is-in). Nothing waits on the scroll position, so
    scrolling costs nothing. Only when motion is welcome, and with the script running. */
 @media (prefers-reduced-motion: no-preference) {
@@ -4132,8 +4226,8 @@ body:has(.sound-toggle:not([hidden])) .hero-controls {
     transition-delay: calc(var(--i) * 40ms);
   }
 
-  /* A world's title waits for its slash to pass */
-  .js[data-mode="clean"] .gate [data-anim~="letters"] .c {
+  /* A world's title waits for its circle to grow */
+  .js[data-mode="clean"] .world [data-anim~="letters"] .c {
     transition-delay: calc(0.3s + var(--i) * 30ms);
   }
 
@@ -4168,12 +4262,25 @@ body:has(.sound-toggle:not([hidden])) .hero-controls {
     scale: 1 0;
   }
 
-  .js[data-mode="clean"] :is([data-anim~="curtain"] img, .gate-photo) {
+  .js[data-mode="clean"] :is([data-anim~="curtain"] img, .world-photo) {
     transition: scale 1.8s var(--ease);
   }
 
-  .js[data-mode="clean"] :is([data-anim~="curtain"]:not(.is-in) img, [data-anim~="slash"]:not(.is-in) .gate-photo) {
+  .js[data-mode="clean"] :is([data-anim~="curtain"]:not(.is-in) img, .world:not(.is-in) .world-photo) {
     scale: 1.2;
+  }
+
+  /* A world's words follow its title up: the paragraph, what's inside, then the link */
+  .js[data-mode="clean"] .world.is-in .world-copy > p {
+    animation: rise 0.8s var(--ease) 0.45s backwards;
+  }
+
+  .js[data-mode="clean"] .world [data-anim~="cards"].is-in > * {
+    animation-delay: calc(0.6s + var(--k, 0) * 90ms);
+  }
+
+  .js[data-mode="clean"] .world.is-in .world-copy > a {
+    animation: rise 0.8s var(--ease) 0.95s backwards;
   }
 
   /* A group's cards flip up, one after another */
@@ -4195,21 +4302,27 @@ body:has(.sound-toggle:not([hidden])) .hero-controls {
     animation: deal 1.1s var(--ease) calc(var(--k, 0) * 110ms) backwards;
   }
 
-  /* Each world cuts in on a slash: the world before it covers it until a diagonal cut sweeps the cover away
-     (a cover, not a clip, for the same reason as the curtain) */
-  .js[data-mode="clean"] [data-anim~="slash"]::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: 3;
-    background: var(--cover);
-    clip-path: polygon(-50% 0, 150% 0, 130% 100%, -50% 100%);
-    pointer-events: none;
+  /* The stars twinkle and, one at a time, shoot */
+  .stars::before {
+    animation: twinkle 4.5s ease-in-out infinite alternate;
   }
 
-  .js[data-mode="clean"] [data-anim~="slash"].is-in::after {
-    clip-path: polygon(-50% 0, -30% 0, -50% 100%, -50% 100%);
-    animation: slash 1.1s var(--ease-io) backwards;
+  .stars::after {
+    animation: twinkle 6.5s ease-in-out -3s infinite alternate;
+  }
+
+  .stars i {
+    animation: shoot 11s linear infinite;
+  }
+
+  .stars i:nth-child(2) {
+    animation-duration: 15s;
+    animation-delay: -6s;
+  }
+
+  .stars i:nth-child(3) {
+    animation-duration: 19s;
+    animation-delay: -13s;
   }
 
   /* The universe grows from a rounded card to the full width */
@@ -4226,7 +4339,7 @@ body:has(.sound-toggle:not([hidden])) .hero-controls {
   }
 
   /* The plate rolls in from the side, then its pin and shadow appear */
-  .js[data-mode="clean"] [data-anim~="roll"]:not(.is-in) :is(.plate, .plate-pin),
+  .js[data-mode="clean"] [data-anim~="roll"]:not(.is-in) :is(.plate, .plate-pin, .plate-logo),
   .js[data-mode="clean"] [data-anim~="roll"]:not(.is-in)::before {
     opacity: 0;
   }
@@ -4235,7 +4348,7 @@ body:has(.sound-toggle:not([hidden])) .hero-controls {
     animation: roll-in 1.7s var(--ease) backwards;
   }
 
-  .js[data-mode="clean"] [data-anim~="roll"].is-in .plate-pin {
+  .js[data-mode="clean"] [data-anim~="roll"].is-in :is(.plate-pin, .plate-logo) {
     animation: pop 0.4s var(--ease) 1.2s backwards;
   }
 
@@ -4286,9 +4399,15 @@ body:has(.sound-toggle:not([hidden])) .hero-controls {
   display: none;
 }
 
-[data-mode="clean"].has-cursor,
-[data-mode="clean"].has-cursor * {
+/* Dialogs and popovers sit in the top layer, above the page's own cursor, so while one is open the
+   system cursor comes back */
+[data-mode="clean"].has-cursor:not(:has(dialog[open], :popover-open)),
+[data-mode="clean"].has-cursor:not(:has(dialog[open], :popover-open)) * {
   cursor: none !important;
+}
+
+[data-mode="clean"].has-cursor:has(dialog[open], :popover-open) :is(.cursor-dot, .cursor-ring) {
+  display: none;
 }
 
 [data-mode="clean"].has-cursor :is(input, textarea) {
@@ -4577,13 +4696,6 @@ body:has(.sound-toggle:not([hidden])) .hero-controls {
   }
 }
 
-@keyframes vs-in {
-  from {
-    opacity: 0;
-    scale: 2.5;
-  }
-}
-
 /* The creatine film: you train (drained), creatine recharges, one more rep (full) */
 @keyframes tank-level {
   0%,
@@ -4671,9 +4783,27 @@ body:has(.sound-toggle:not([hidden])) .hero-controls {
   }
 }
 
-@keyframes slash {
-  from {
-    clip-path: polygon(-50% 0, 150% 0, 130% 100%, -50% 100%);
+@keyframes twinkle {
+  to {
+    opacity: 0.15;
+  }
+}
+
+/* Down to the left, the tail trailing up behind the head, then gone until the next turn */
+@keyframes shoot {
+  0% {
+    opacity: 0;
+    transform: rotate(-24deg) translateX(0) scaleX(0.2);
+  }
+
+  1.5% {
+    opacity: 1;
+  }
+
+  7%,
+  100% {
+    opacity: 0;
+    transform: rotate(-24deg) translateX(-26rem) scaleX(1);
   }
 }
 

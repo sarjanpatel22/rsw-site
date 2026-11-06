@@ -1,7 +1,7 @@
 """Smoke test for the RSW site: python3 check.py [screenshot_dir]
 
 Drives headless Chromium through the mode popup and switch, Clean's shop, cart, slider, the universe orbit
-(drift, drag, swipe, Tab, click) and prism, scroll effects, the spin-the-plate game, Manga's power-up hero and comic
+(drift, drag, swipe, Tab) and the worlds its planets open, scroll effects, the spin-the-plate game, Manga's power-up hero and comic
 strip, smooth scrolling, product boxes, Gujarati font, phone menu and the AI Sensei chat, and checks there is no
 sideways scrolling on a small phone.
 """
@@ -136,7 +136,7 @@ try:
     def shown(sel):
         return js(f"return getComputedStyle(document.querySelector('{sel}')).display") != "none"
 
-    clean_parts, manga_parts = [".slider", ".gates", ".tank"], [".hero-stage", ".universe > .orbit", ".strip"]
+    clean_parts, manga_parts = [".slider", ".hub", ".creatine", ".strip-photo", ".strip-facts"], [".hero-stage", ".universe > .orbit", ".strip"]
     assert all(map(shown, clean_parts)) and not any(map(shown, manga_parts)), "Clean should show only its own parts"
     gujarati_shown = "return [...document.querySelectorAll('[lang=\"gu\"]')].some((el) => el.checkVisibility())"
     assert not js(gujarati_shown), "Clean should show no Gujarati"
@@ -151,7 +151,10 @@ try:
 
     # Clean is a shop: the products come before the story, and Add to cart fills the cart
     top_of = lambda sel: js(f"return document.querySelector('{sel}').getBoundingClientRect().top")
-    assert top_of("#lab") < top_of("#story"), "Clean should show the shop before the story"
+    assert top_of("#lab") < top_of("#warriors") < top_of(".strip-photo") < top_of("#universe") < top_of("#story"), \
+        "Clean should show the shop, the Warriors, the photo strip and the universe before the story"
+    assert top_of("#story") < top_of(".strip-facts") < top_of(".creatine") < top_of(".soon"), \
+        "Clean should follow the story with the facts label and how creatine works"
     adds = driver.find_elements(By.CSS_SELECTOR, ".add")
     js("arguments[0].click(); arguments[1].click()", adds[0], adds[1])
     assert driver.find_element(By.CSS_SELECTOR, ".cart-count").text == "2", "cart badge should count 2 items"
@@ -175,7 +178,7 @@ try:
     # Clean: nothing follows the scroll position; each entrance plays once, the first time it comes into view
     vh = js("return innerHeight")
     assert js("return document.documentElement.classList.contains('lenis')"), "Lenis smooth scrolling not running"
-    assert js("return document.querySelectorAll('.box').length") == 11, "expected 3 banner boxes, 5 card boxes and 3 on the Lab's face"
+    assert js("return document.querySelectorAll('.box').length") == 11, "expected 3 banner boxes, 5 card boxes and 3 in the Lab's world"
 
     def jump(y):
         js(f"scrollTo({{top: {y}, behavior: 'instant'}})")
@@ -200,71 +203,77 @@ try:
     jump(at_heading)
     assert risen(heading), "scrolling back to it shouldn't play it again"
 
-    # The universe grows to the full width once; its worlds come one after another, each a screen that cuts in
-    def world_at(x, y):  # the title as a screen reader reads it (the split letters are hidden from it)
-        return js(f"""const h = document.elementFromPoint(innerWidth * {x}, innerHeight * {y}).closest('.gate').querySelector('.h1');
-            return [...h.querySelectorAll('.sr')].map((s) => s.textContent).join(' ') || h.textContent""")
-
+    # The universe grows to the full width once, into a night sky of twinkling stars round the orbit
     jump(js("return document.querySelector('.universe').getBoundingClientRect().top + scrollY - innerHeight / 2"))
     time.sleep(1.6)
     assert js("return getComputedStyle(document.querySelector('.universe')).scale") in ("1", "none"), "Universe should grow to full width"
-    jump(js("return document.querySelectorAll('.gate')[2].getBoundingClientRect().top + scrollY"))
-    time.sleep(1.5)
-    assert world_at(0.5, 0.5) == "The Warriors" and played(".gate:nth-child(3)"), "the Warriors should cut in and fill the screen"
-    assert js("return getComputedStyle(document.querySelector('.gate:nth-child(3)'), '::after').clipPath").startswith("polygon(-50% 0px, -30% 0px"), \
-        "the Warriors' cover should be swept away"
+    assert js("""const s = document.querySelector('.stars');
+        return s.checkVisibility() && getComputedStyle(s).backgroundImage.includes('radial-gradient')
+          && getComputedStyle(s, '::after').animationName === 'twinkle'"""), "the orbit should sit among twinkling stars"
 
-    # Every world's words fit on its screen and stay off its picture. The hub's words stay off the orbit, whose
-    # planets and logo stay inside its box, and the near half of the ring passes clear of the logo's letters.
+    # The hub's words fit on its screen and stay off the orbit, whose planets and logo stay inside its box, and
+    # the near half of the ring passes clear of the logo's letters. Each world's words fit on its screen, clear
+    # of its picture and its ×.
     js("document.querySelectorAll('.universe, .universe [data-anim]').forEach((el) => el.classList.add('is-in'))")
     time.sleep(2.5)  # the universe's entrances all done (the rest still play when reached)
+    measure = """const r = document.createRange();
+        // a split title is measured by its letters: its screen-reader copy is laid out unclipped
+        const box = (el) => {
+          const ls = [...el.querySelectorAll('.c')].map((l) => l.getBoundingClientRect());
+          if (!ls.length) { r.selectNodeContents(el); return r.getBoundingClientRect(); }
+          return {left: Math.min(...ls.map(b => b.left)), right: Math.max(...ls.map(b => b.right)),
+                  top: Math.min(...ls.map(b => b.top)), bottom: Math.max(...ls.map(b => b.bottom))};
+        };
+        const meets = (a, b) => a.right > b.left && a.left < b.right && a.bottom > b.top && a.top < b.bottom;"""
 
-    def world_words_fit(w, h):
+    def universe_words_fit(w, h):
         driver.set_window_size(w, h)
         time.sleep(0.4)
-        for face in range(5):
-            jump(js(f"return document.querySelectorAll('.gate')[{face}].getBoundingClientRect().top + scrollY"))
-            bad = js("""const g = document.querySelectorAll('.gate')[arguments[0]];
-                    const copy = g.querySelector('.gate-copy');
-                    const r = document.createRange();
-                    const shown = [...copy.children].filter(c => c.checkVisibility());
-                    // a split title is measured by its letters: its screen-reader copy is laid out unclipped
-                    const box = (el) => {
-                      const ls = [...el.querySelectorAll('.c')].map((l) => l.getBoundingClientRect());
-                      if (!ls.length) { r.selectNodeContents(el); return r.getBoundingClientRect(); }
-                      return {left: Math.min(...ls.map(b => b.left)), right: Math.max(...ls.map(b => b.right)),
-                              top: Math.min(...ls.map(b => b.top)), bottom: Math.max(...ls.map(b => b.bottom))};
-                    };
-                    const words = shown.map(box);
-                    const nav = document.querySelector('.nav').getBoundingClientRect().bottom;
-                    if (words.some(b => b.top < nav || b.bottom > innerHeight)) return 'off screen';
-                    if (g.classList.contains('hub')) {
-                      const o = g.querySelector('.orbit'), ob = o.getBoundingClientRect();
-                      const meets = (a, b) => a.right > b.left && a.left < b.right && a.bottom > b.top && a.top < b.bottom;
-                      if (words.some((b, k) => shown[k] !== o && meets(b, ob))) return 'on the orbit';
-                      const parts = [...o.querySelectorAll('.planet, .sun')].map((e) => e.getBoundingClientRect());
-                      if (parts.some((b) => b.left < ob.left - 1 || b.right > ob.right + 1 || b.top < ob.top - 1 || b.bottom > ob.bottom + 1)) return 'beside a planet or logo that leaves the orbit';
-                      const sun = o.querySelector('.sun').getBoundingClientRect(), ring = o.querySelectorAll('.ring path')[1];
-                      for (let n = 0; n <= 60; n++) {
-                        const pt = ring.getPointAtLength((ring.getTotalLength() * n) / 60);
-                        const x = ob.left + pt.x, y = ob.top + pt.y;
-                        if (x > sun.left + 4 && x < sun.right - 4 && y > sun.top + 4 && y < sun.bottom - 4) return 'beside a ring that cuts through the logo';
-                      }
-                      return '';
-                    }
-                    const photo = g.querySelector('.gate-photo');
-                    const p = photo?.checkVisibility() && photo.getBoundingClientRect();
-                    return p && words.some(b => b.right > p.left && b.left < p.right && b.bottom > p.top && b.top < p.bottom) ? 'under its picture' : '';""", face)
-            assert not bad, f"{w}x{h}: world {face}'s words are {bad}"
+        jump(js("return document.querySelector('.hub').getBoundingClientRect().top + scrollY"))
+        bad = js(measure + """
+            const shown = [...document.querySelector('.hub-copy').children].filter(c => c.checkVisibility());
+            const words = shown.map(box);
+            const nav = document.querySelector('.nav').getBoundingClientRect().bottom;
+            if (words.some(b => b.top < nav || b.bottom > innerHeight)) return 'off screen';
+            const o = document.querySelector('.hub .orbit'), ob = o.getBoundingClientRect();
+            if (words.some((b, k) => shown[k] !== o && meets(b, ob))) return 'on the orbit';
+            const parts = [...o.querySelectorAll('.planet, .sun')].map((e) => e.getBoundingClientRect());
+            if (parts.some((b) => b.left < ob.left - 1 || b.right > ob.right + 1 || b.top < ob.top - 1 || b.bottom > ob.bottom + 1)) return 'beside a planet or logo that leaves the orbit';
+            const sun = o.querySelector('.sun').getBoundingClientRect(), ring = o.querySelectorAll('.ring path')[1];
+            for (let n = 0; n <= 60; n++) {
+              const pt = ring.getPointAtLength((ring.getTotalLength() * n) / 60);
+              const x = ob.left + pt.x, y = ob.top + pt.y;
+              if (x > sun.left + 4 && x < sun.right - 4 && y > sun.top + 4 && y < sun.bottom - 4) return 'beside a ring that cuts through the logo';
+            }
+            return '';""")
+        assert not bad, f"{w}x{h}: the universe's words are {bad}"
+        for world in ("lab", "warriors", "vault"):
+            bad = js(measure + """
+                const g = document.getElementById(arguments[0]);
+                g.showModal();  // straight to how it ends up: words risen, no circle growing
+                [g, ...g.querySelectorAll('[data-anim]')].forEach((el) => el.classList.add('is-in'));
+                g.getAnimations({ subtree: true }).forEach((a) => a.effect.getComputedTiming().endTime < Infinity && a.finish());  // the cartons float for ever
+                const shown = [...g.querySelector('.world-copy').children].filter(c => c.checkVisibility());
+                const words = shown.map(box);
+                const x = g.querySelector('.world-close').getBoundingClientRect();
+                const photo = g.querySelector('.world-photo'), p = photo.getBoundingClientRect();
+                const result = words.some(b => b.top < 0 || b.bottom > innerHeight || b.right > innerWidth) ? 'off screen'
+                  : words.some(b => meets(b, x)) ? 'under its ×'
+                  : p.height > 0 && words.some(b => meets(b, p)) ? 'under its picture' : '';
+                g.close();
+                return result;""", f"world-{world}")
+            assert not bad, f"{w}x{h}: the {world} world's words are {bad}"
 
     sizes = [(1440, 900), (1366, 768), (1280, 720), (1920, 1080), (1024, 911), (768, 1167), (390, 844), (360, 740), (375, 667)]
     for size in sizes:  # window sizes: laptops, a landscape and a portrait iPad, phones
-        world_words_fit(*size)
+        universe_words_fit(*size)
     driver.set_window_size(1440, 900)
     time.sleep(0.4)
 
-    # The orbit: the worlds drift round the logo; one tabbed to comes to the front and a click opens it;
-    # dragging spins them without opening one
+    # The orbit: the worlds drift round the logo, and one tabbed to comes to the front. A click opens its world: a
+    # circle of the planet's colour grows out of it to fill the screen and the words rise in; Esc or × shrinks it
+    # back into the planet, and its link closes it and jumps to its part of the page. Dragging spins the worlds
+    # without opening one.
     def planets(orbit):
         """[centre x, centre y, scale, z-index] of each planet: the Lab, the Warriors, the Vault"""
         return js(f"""return [...document.querySelectorAll('{orbit} .planet')].map((p) => {{ const b = p.getBoundingClientRect();
@@ -279,25 +288,53 @@ try:
         ps = planets(orbit)
         return max(range(3), key=lambda k: ps[k][2])
 
-    gates_top = js("return document.querySelector('.gates').getBoundingClientRect().top + scrollY")
-    jump(gates_top)
+    def world_open():
+        return js("return document.querySelector('.world[open]')?.id || ''")
+
+    hub_top = js("return document.querySelector('.hub').getBoundingClientRect().top + scrollY")
+    jump(hub_top)
     time.sleep(1)
     assert drifts(".hub"), "the worlds should drift round the logo"
 
-    js("arguments[0].focus()", driver.find_element(By.CSS_SELECTOR, ".hub + .gate .gate-copy > a"))
+    js("arguments[0].focus()", driver.find_element(By.CSS_SELECTOR, "#sensei .btn"))
     time.sleep(1)  # focus scrolls it into view, smoothly
     ActionChains(driver).key_down(Keys.SHIFT).send_keys(Keys.TAB).key_up(Keys.SHIFT).perform()
     time.sleep(1.5)
-    assert js("return document.activeElement.getAttribute('href')") == "#vault", "Shift+Tab from the Lab's link should reach the Vault planet"
+    assert js("return document.activeElement.getAttribute('href')") == "#vault", "Shift+Tab from the Sensei card should reach the Vault planet"
     assert front(".hub") == 2 and planets(".hub")[2][3] == "4", "a world tabbed to should come to the front"
+    where = js("return [location.hash, scrollY]")
     driver.find_element(By.CSS_SELECTOR, '.hub .planet[href="#vault"]').click()
+    time.sleep(0.3)
+    assert world_open() == "world-vault" and js("return document.querySelector('#world-vault').getAnimations().length") == 1, \
+        "clicking the Vault planet should grow its world out of it"
+    time.sleep(1.5)
+    assert js("return getComputedStyle(document.querySelector('#world-vault')).clipPath") == "none", "the Vault's world should fill the screen"
+    assert risen("#world-vault .h1") and js("return document.activeElement.id") == "world-vault", "the Vault's title should rise in, with focus in its world"
+    assert js("return getComputedStyle(document.documentElement).overflow") == "hidden", "the page should hold still behind a world"
+    ActionChains(driver).send_keys(Keys.ESCAPE).perform()
+    time.sleep(0.25)
+    assert world_open() == "world-vault", "Esc should first shrink the world back into its planet"
+    time.sleep(0.8)
+    assert world_open() == "" and js("return document.activeElement.getAttribute('href')") == "#vault", \
+        "Esc should close the world and hand focus back to its planet"
+    now = js("return [location.hash, scrollY, getComputedStyle(document.documentElement).overflow]")
+    assert now == where + ["visible"], f"a world opened and closed should leave the page where it was, scrolling: {where} -> {now}"
+    js("document.querySelector('.hub .planet[href=\"#warriors\"]').click()")
+    time.sleep(1.5)
+    assert js("return document.querySelector('#world-warriors .world-photo').naturalWidth") > 0, "the Warriors' world should show its photo"
+    driver.find_element(By.CSS_SELECTOR, "#world-warriors .world-close").click()
+    time.sleep(1)
+    assert world_open() == "", "the × should close the world"
+    js("document.querySelector('.hub .planet[href=\"#lab\"]').click()")
+    time.sleep(1.5)
+    driver.find_element(By.CSS_SELECTOR, "#world-lab .world-copy > a").click()
     time.sleep(2.5)
-    assert 0 <= top_of("#vault") < 150, f"clicking the Vault planet should open the Vault, it's {top_of('#vault')}px from the top"
+    assert world_open() == "" and 0 <= top_of("#lab") < 150, f"the Lab's link should close its world and open the shop, it's {top_of('#lab')}px from the top"
 
     def mouse(kind, x, y, **more):
         driver.execute_cdp_cmd("Input.dispatchMouseEvent", {"type": kind, "x": x, "y": y, **more})
 
-    jump(gates_top)
+    jump(hub_top)
     time.sleep(1)
     k = front(".hub")
     x, y = planets(".hub")[k][:2]
@@ -309,11 +346,11 @@ try:
         time.sleep(0.016)
     mouse("mouseReleased", x + 250, y, button="left", clickCount=1)
     time.sleep(0.3)
-    assert js("return [location.hash, scrollY]") == where, "dragging a planet should spin the worlds, not open it"
+    assert js("return [location.hash, scrollY]") == where and not world_open(), "dragging a planet should spin the worlds, not open one"
     assert planets(".hub")[k][0] - x > 100, "dragging right should carry the front world right"
     mouse("mouseMoved", 5, 5)  # off the planets, so they drift again
 
-    # Clean's creatine tank plays once, like a short film, when it comes into view: training drains the level
+    # Clean's creatine tank plays like a short film each time it comes into view: training drains the level
     # to 20%, creatine refills it to 60%, then to 100%, each step's words in turn
     def tank():
         return js("""const t = document.querySelector('.tank');
@@ -327,6 +364,14 @@ try:
     assert any(level <= 25 and steps == [True, False, False] for level, steps in seen), f"training should drain the level on the first step: {seen}"
     assert any(50 <= level <= 70 and steps == [False, True, False] for level, steps in seen), f"creatine should refill it on the second step: {seen}"
     assert seen[-1] == [100, [False, False, True]], f"the film should end full, on the last step: {seen[-1]}"
+    jump(0)
+    time.sleep(0.5)
+    jump(js("return document.querySelector('.tank').getBoundingClientRect().top + scrollY"))
+    again = []
+    for _ in range(15):
+        again.append(tank())
+        time.sleep(0.2)
+    assert any(level <= 25 and steps == [True, False, False] for level, steps in again), f"coming back, the film should play again: {again}"
 
     # The level runs in a bar of its own (a column, or a band on phones): at every size it's big enough to
     # see, and the words stay out of it and on the screen
@@ -336,13 +381,13 @@ try:
         bad = js("""const tank = document.querySelector('.tank'), r = document.createRange();
             const bar = tank.querySelector('.tank-bar').getBoundingClientRect();
             if (bar.width < innerWidth * 0.35 || bar.height < 80) return 'beside a level bar too thin to see';
-            const box = (el) => {  // a split title is measured by its letters (see the worlds above)
+            const box = (el) => {  // a split title is measured by its letters (see the universe above)
               const ls = [...el.querySelectorAll('.c')].map((l) => l.getBoundingClientRect());
               if (!ls.length) { r.selectNodeContents(el); return r.getBoundingClientRect(); }
               return {left: Math.min(...ls.map(b => b.left)), right: Math.max(...ls.map(b => b.right)),
                       top: Math.min(...ls.map(b => b.top)), bottom: Math.max(...ls.map(b => b.bottom))};
             };
-            const boxes = [...tank.querySelectorAll('.tank-view > h3, .tank-steps li:nth-child(3)')].map(box)
+            const boxes = [...tank.querySelectorAll('.tank-view > h2, .tank-steps li:nth-child(3)')].map(box)
               .concat(tank.querySelector('.tank-level').getBoundingClientRect());
             if (boxes.some((b) => b.right > bar.left && b.left < bar.right && b.bottom > bar.top && b.top < bar.bottom)) return 'into the level bar';
             const nav = document.querySelector('.nav').getBoundingClientRect().bottom;
@@ -381,6 +426,10 @@ try:
     assert plate_turn() - before > 360, f"a throw to the right above the middle should spin the plate clockwise, it turned {plate_turn() - before:.0f}°"
     time.sleep(4.5)
     assert js("return document.querySelector('.spin-result').textContent"), "the thrown plate should land on a reward"
+    logo, middle = js("""const l = document.querySelector('.plate-logo').getBoundingClientRect(), p = document.querySelector('.plate').getBoundingClientRect();
+        return [[l.left + l.width / 2, l.top + l.height / 2], [p.left + p.width / 2, p.top + p.height / 2]]""")
+    assert max(abs(a - b) for a, b in zip(logo, middle)) < 2 and js("return getComputedStyle(document.querySelector('.plate-logo')).rotate") == "none", \
+        f"the RSW logo should sit upright in the middle of the plate: {logo} vs {middle}"
 
     # The photos of people training all load (the lazy ones once scrolled to); each mode shows its own
     def photos_load(label):
@@ -392,6 +441,8 @@ try:
         assert not broken, f"{label}: photos failed to load: {broken}"
 
     photos_load("Clean")
+    greyed = js("return [...document.querySelectorAll('img')].filter((img) => img.checkVisibility() && getComputedStyle(img).filter !== 'none').map((img) => img.getAttribute('src'))")
+    assert not greyed, f"Clean shows its photos in full colour, but these are filtered: {greyed}"
 
     # Whatever has played its entrance shows: nothing is left invisible
     def nothing_stuck(label):
@@ -552,7 +603,7 @@ try:
     assert not js("return document.documentElement.classList.contains('lenis')"), \
         "touch screens should scroll natively: Lenis's blocking touch listeners make swipes wait"
     # A sideways swipe on the orbit spins the worlds and leaves the page where it is
-    jump(js("return document.querySelector('.gates').getBoundingClientRect().top + scrollY"))
+    jump(js("return document.querySelector('.hub').getBoundingClientRect().top + scrollY"))
     time.sleep(1)
     ps = planets(".hub")
     k = min((i for i in range(3) if ps[i][2] > 1), key=lambda i: ps[i][0])  # the leftmost in front, which a swipe right carries right
@@ -581,7 +632,7 @@ try:
     driver.execute_cdp_cmd("Emulation.setTouchEmulationEnabled", {"enabled": False})
     driver.execute_cdp_cmd("Emulation.clearDeviceMetricsOverride", {})
 
-    # A phone held sideways (844x390): too short to pin a scene, so Clean's gates and tank stack instead,
+    # A phone held sideways (844x390): too short to pin a scene, so Clean's creatine scene stacks instead,
     # and Manga's hero words fit between the bar and the bottom of the screen
     driver.execute_cdp_cmd("Emulation.setDeviceMetricsOverride", {"width": 844, "height": 390, "deviceScaleFactor": 1, "mobile": True})
     for m in ("clean", "manga"):
@@ -590,7 +641,7 @@ try:
         jump(0)
         time.sleep(2)
         if m == "clean":
-            pinned = js("return ['.gates-stage', '.tank-stage'].map((s) => getComputedStyle(document.querySelector(s)).position)")
+            pinned = js("return ['.tank-stage'].map((s) => getComputedStyle(document.querySelector(s)).position)")
             assert "sticky" not in pinned, f"a sideways phone should get the stacked scenes, got {pinned}"
         else:
             room = js("""const nav = document.querySelector('.nav').getBoundingClientRect().bottom, r = document.createRange();
@@ -646,11 +697,10 @@ try:
     assert "Whey Protein ₹2,499" in said(), f"Sensei should quote the shop's prices, said: {said()}"
     box.send_keys(Keys.ESCAPE)
     assert not chat_open(), "Escape should close the chat"
-    # The AI Sensei world's button in the gates and the AI Sensei card open the same chat
-    for sel in ('.gate-copy > button[popovertarget="chat"]', "#sensei .btn"):
-        js("arguments[0].click()", driver.find_element(By.CSS_SELECTOR, sel))
-        assert chat_open(), f"{sel} should open the chat"
-        js("document.querySelector('#chat').hidePopover()")
+    # The AI Sensei card opens the same chat
+    js("arguments[0].click()", driver.find_element(By.CSS_SELECTOR, "#sensei .btn"))
+    assert chat_open(), "the AI Sensei card should open the chat"
+    js("document.querySelector('#chat').hidePopover()")
     # Typed answers are read by keywords tried in order ("non veg" isn't veg, "gain weight" isn't losing it);
     # a "no" in the answer means ask again rather than guess. Picks are preset so any plan can be built.
     cases = [(0, "I want to lose weight", "lose"), (0, "gain weight", "muscle"), (0, "weight kam karna hai", "lose"),
@@ -713,12 +763,16 @@ try:
     jump(js("return document.querySelector('.hub .orbit').getBoundingClientRect().top + scrollY - 100"))
     time.sleep(0.5)
     assert not drifts(".hub"), "the worlds should hold still with reduced motion"
+    js("document.querySelector('.hub .planet[href=\"#lab\"]').click()")
+    assert js("return document.querySelector('#world-lab').open && !document.querySelector('#world-lab').getAnimations().length"), \
+        "with reduced motion a world should open at once"
+    js("document.querySelector('#world-lab .world-close').click()")
+    assert world_open() == "", "with reduced motion the × should close a world at once"
     js("document.querySelector('.spin-go').click()")
     time.sleep(0.2)
     assert js("return document.querySelector('.spin-result').textContent"), "with reduced motion the plate should land at once"
     covered = js("""return [...document.querySelectorAll('[data-anim]')].filter((el) => el.checkVisibility() && (
         getComputedStyle(el).opacity !== '1'
-        || (el.matches('[data-anim~=slash]') && getComputedStyle(el, '::after').content !== 'none')
         || (el.matches('[data-anim~=curtain]') && getComputedStyle(el, '::before').content !== 'none')
         || [...el.querySelectorAll('.c')].some((c) => !['none', '0px'].includes(getComputedStyle(c).translate)))).length""")
     assert covered == 0, f"{covered} entrances hide or shift things with reduced motion"

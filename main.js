@@ -382,7 +382,7 @@ const rewards = [
 const sliceAngle = 360 / rewards.length;
 
 // The plate, drawn round its middle: a reward on each slice of the rim, then the grips, the embossed
-// lettering and the collar round the hole for the bar
+// lettering and the hub, which the RSW logo covers (index.html)
 const draw = (name, attrs, parent) => {
   const node = document.createElementNS('http://www.w3.org/2000/svg', name);
   for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
@@ -405,8 +405,6 @@ draw('path', { id: 'plate-ring', d: 'M0 -58.5A58.5 58.5 0 1 1 0 58.5A58.5 58.5 0
 draw('textPath', { href: '#plate-ring', textLength: (Math.PI * 117 - 6).toFixed(1), lengthAdjust: 'spacing' },
   draw('text', { class: 'p-emboss' }, plate)).textContent = 'REAL SAIYAN WELLNESS · 20 KG · TAP INTO YOUR FINAL FORM · 20 KG ·';
 draw('circle', { r: 31, class: 'p-hub' }, plate);
-draw('circle', { r: 21, class: 'p-collar' }, plate);
-draw('circle', { r: 12.5, class: 'p-hole' }, plate);
 
 let turned = 0; // the plate's turn in degrees, clockwise
 let spinning = false;
@@ -638,14 +636,13 @@ function idleReplay() {
   else replayTimer = setTimeout(idleReplay, replayEvery);
 }
 
-// ---------- Section order: Clean is a shop, so its products and Warriors come straight after the hero ----------
+// ---------- Section order: Clean is a shop, so its products, Warriors, photo strip and universe come straight after the hero ----------
 // Manga tells the story first. CSS order shows that from the first paint; moving the sections too
 // keeps Tab and screen readers in the order on screen.
-const shopFirst = [document.querySelector('#lab'), document.querySelector('#warriors')];
-const soon = document.querySelector('.soon');
+const [lab, warriors, strip, universe, story] = ['#lab', '#warriors', '.strip-photo', '#universe', '#story'].map((sel) => document.querySelector(sel));
 function orderSections() {
-  if (root.dataset.mode === 'clean') hero.after(...shopFirst);
-  else soon.before(...shopFirst);
+  if (root.dataset.mode === 'clean') hero.after(lab, warriors, strip, universe);
+  else story.after(universe, lab, warriors);
 }
 orderSections();
 
@@ -841,6 +838,60 @@ document.querySelectorAll('.orbit').forEach((orbit) => {
   }, { threshold: [0, 0.4] }).observe(orbit);
 });
 
+// ---------- Clean's worlds: a planet tapped opens its world full screen ----------
+// The world grows out of the planet as a circle of the planet's colour, then its words rise in (styles.css).
+// ×, Esc or its link shrinks it back into the planet, wherever the planet has drifted to by then; the link
+// closes it at once instead, as the page jumps to that part of the shop.
+function portal(world, planet, opening) {
+  const disc = planet.firstElementChild.getBoundingClientRect(); // the planet as drawn, grown on hover
+  const x = disc.left + disc.width / 2;
+  const y = disc.top + disc.height / 2;
+  const cover = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+  const circles = [`circle(${disc.width / 2}px at ${x}px ${y}px)`, `circle(${cover}px at ${x}px ${y}px)`];
+  return world.animate({ clipPath: opening ? circles : circles.reverse() }, {
+    duration: opening ? 800 : 550,
+    easing: opening ? 'cubic-bezier(0.7, 0, 0.2, 1)' : 'cubic-bezier(0.6, 0, 0.8, 0.4)',
+  }).finished;
+}
+
+document.querySelectorAll('.hub .planet').forEach((planet) => {
+  const world = document.getElementById(`world-${planet.hash.slice(1)}`);
+  const parts = [world, ...world.querySelectorAll('[data-anim]')];
+  planet.setAttribute('aria-haspopup', 'dialog');
+
+  let closing = false;
+  const lock = () => world.open && !closing && root.classList.add('world-open'); // styles.css: once it covers the page
+
+  planet.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation(); // Lenis's anchor jump listens further up
+    parts.forEach((el) => el.classList.remove('is-in'));
+    world.showModal();
+    world.focus();
+    void world.offsetWidth; // its words' starting places, so they rise from there
+    parts.forEach((el) => el.classList.add('is-in'));
+    if (reduceMotion) lock();
+    else portal(world, planet, true).then(lock);
+  });
+
+  async function shut(animate) {
+    if (closing || !world.open) return;
+    closing = true;
+    root.classList.remove('world-open'); // the page settles back before the circle shrinks over it
+    if (animate && !reduceMotion) await portal(world, planet, false);
+    world.close();
+    closing = false;
+  }
+  world.addEventListener('close', () => root.classList.remove('world-open')); // however it closed
+  world.addEventListener('cancel', (e) => { // Esc
+    if (!e.cancelable) return; // the browser closes it at once
+    e.preventDefault();
+    shut(true);
+  });
+  world.querySelector('.world-close').addEventListener('click', () => shut(true));
+  world.querySelectorAll('a[href^="#"]').forEach((link) => link.addEventListener('click', () => shut(false)));
+});
+
 // ---------- Scroll reveals ----------
 const io = new IntersectionObserver((entries) => {
   entries.filter((e) => e.isIntersecting).forEach((e, i) => {
@@ -852,7 +903,7 @@ const io = new IntersectionObserver((entries) => {
 }, { threshold: 0.15 });
 document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
 
-// ---------- Clean's entrances: each plays once, the first time it scrolls into view ----------
+// ---------- Clean's entrances: each plays once, the first time it scrolls into view (the creatine film each time) ----------
 // data-anim names the effect and styles.css draws it. Titles split into letters here first (a hidden copy
 // keeps the words whole for screen readers), and labels decode from scrambled letters.
 const graphemes = window.Intl?.Segmenter ? new Intl.Segmenter() : null; // keeps a letter and its accents together
@@ -914,7 +965,16 @@ document.querySelectorAll('[data-anim~="letters"], .slider .display').forEach(sp
 document.querySelectorAll('[data-anim~="cards"], [data-anim~="deal"]').forEach((group) => {
   [...group.children].forEach((el, k) => el.style.setProperty('--k', k));
 });
-document.querySelectorAll('[data-anim]').forEach((el) => entrances.observe(el));
+document.querySelectorAll('[data-anim]').forEach((el) => el.closest('.world') || entrances.observe(el)); // a world plays its own on opening
+// The creatine film rewinds once it's wholly off the screen, so it plays again the next time it comes into view
+const rewind = new IntersectionObserver((entries) => {
+  for (const { isIntersecting, target } of entries) {
+    if (isIntersecting) continue;
+    target.classList.remove('is-in');
+    entrances.observe(target);
+  }
+});
+document.querySelectorAll('[data-anim~="film"]').forEach((el) => rewind.observe(el));
 
 // ---------- Scroll-linked effects (skipped when motion is unwelcome) ----------
 // Only Manga's hero follows the scroll: it pins and charges up as you scroll its tall track. Clean's
