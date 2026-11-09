@@ -213,7 +213,7 @@ try:
 
     # The hub's words fit on its screen and stay off the orbit, whose planets and logo stay inside its box, and
     # the near half of the ring passes clear of the logo's letters. Each world's words fit on its screen, clear
-    # of its picture and its ×.
+    # of its picture and its ×, and its picture never shrinks to a sliver.
     js("document.querySelectorAll('.universe, .universe [data-anim]').forEach((el) => el.classList.add('is-in'))")
     time.sleep(2.5)  # the universe's entrances all done (the rest still play when reached)
     measure = """const r = document.createRange();
@@ -226,9 +226,7 @@ try:
         };
         const meets = (a, b) => a.right > b.left && a.left < b.right && a.bottom > b.top && a.top < b.bottom;"""
 
-    def universe_words_fit(w, h):
-        driver.set_window_size(w, h)
-        time.sleep(0.4)
+    def hub_words_fit(w, h):
         jump(js("return document.querySelector('.hub').getBoundingClientRect().top + scrollY"))
         bad = js(measure + """
             const shown = [...document.querySelector('.hub-copy').children].filter(c => c.checkVisibility());
@@ -247,6 +245,8 @@ try:
             }
             return '';""")
         assert not bad, f"{w}x{h}: the universe's words are {bad}"
+
+    def worlds_fit(w, h):
         for world in ("lab", "warriors", "vault"):
             bad = js(measure + """
                 const g = document.getElementById(arguments[0]);
@@ -257,16 +257,30 @@ try:
                 const words = shown.map(box);
                 const x = g.querySelector('.world-close').getBoundingClientRect();
                 const photo = g.querySelector('.world-photo'), p = photo.getBoundingClientRect();
-                const result = words.some(b => b.top < 0 || b.bottom > innerHeight || b.right > innerWidth) ? 'off screen'
-                  : words.some(b => meets(b, x)) ? 'under its ×'
-                  : p.height > 0 && words.some(b => meets(b, p)) ? 'under its picture' : '';
+                const result = words.some(b => b.top < 0 || b.bottom > innerHeight || b.right > innerWidth) ? 'its words run off screen'
+                  : words.some(b => meets(b, x)) ? 'its words sit under its ×'
+                  : words.some(b => meets(b, p)) ? 'its words sit under its picture'
+                  : Math.min(p.width, p.height) < 150 ? `its picture is squeezed to ${Math.round(p.width)}x${Math.round(p.height)}` : '';
                 g.close();
                 return result;""", f"world-{world}")
-            assert not bad, f"{w}x{h}: the {world} world's words are {bad}"
+            assert not bad, f"{w}x{h}: in the {world} world, {bad}"
 
     sizes = [(1440, 900), (1366, 768), (1280, 720), (1920, 1080), (1024, 911), (768, 1167), (390, 844), (360, 740), (375, 667)]
-    for size in sizes:  # window sizes: laptops, a landscape and a portrait iPad, phones
-        universe_words_fit(*size)
+    for w, h in sizes:  # window sizes: laptops, a landscape and a portrait iPad, phones
+        driver.set_window_size(w, h)
+        time.sleep(0.4)
+        hub_words_fit(w, h)
+        worlds_fit(w, h)
+    # Short phones at their exact page sizes (a window this short loses part of its height to its own bars): an
+    # iPhone SE under Safari's bars, and phones held sideways. Sideways, the hub's words take more than one
+    # screen; it's an ordinary section, so they scroll.
+    for w, h in [(375, 548), (667, 375), (740, 330)]:
+        driver.execute_cdp_cmd("Emulation.setDeviceMetricsOverride", {"width": w, "height": h, "deviceScaleFactor": 1, "mobile": True})
+        time.sleep(0.4)
+        if h > w:
+            hub_words_fit(w, h)
+        worlds_fit(w, h)
+    driver.execute_cdp_cmd("Emulation.clearDeviceMetricsOverride", {})
     driver.set_window_size(1440, 900)
     time.sleep(0.4)
 

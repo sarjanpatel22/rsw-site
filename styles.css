@@ -2210,8 +2210,23 @@ html.world-open {
   rotate: 90deg;
 }
 
-/* Phones: the picture fills what the words leave of the screen, under them */
-@media (max-width: 760px) {
+/* Short screens (phones held sideways): the words start near the top, so they fit beside the picture.
+   The × sits over the picture, clear of them. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .world-copy {
+    gap: 0.6rem;
+    padding-block: 1rem;
+  }
+
+  .world .h1 {
+    font-size: clamp(1.75rem, 10svh, 3rem);
+  }
+}
+
+/* Phones held upright: the picture fills what the words leave of the screen, under them, but never gets
+   thinner than a band a person fits in; on a short screen the world scrolls down to it. Held sideways,
+   phones keep the picture beside the words: under them it would shrink to nothing. */
+@media (max-width: 760px) and (orientation: portrait) {
   .world[open] {
     display: flex;
     flex-direction: column;
@@ -2227,7 +2242,7 @@ html.world-open {
     position: static;
     flex: 1 1 0;
     width: 100%;
-    min-height: 0;
+    min-height: 60vw;
   }
 
   .world-cartons {
